@@ -28,9 +28,23 @@ type Row = {
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "sku-data-theme";
 const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+const resolveBasePath = () => {
+  if (typeof window !== "undefined") {
+    const data = (window as any).__NEXT_DATA__;
+    if (data?.basePath) {
+      return data.basePath as string;
+    }
+  }
+  return BASE_PATH;
+};
 const withBasePath = (path: string) => {
-  const normalized = path.startsWith("/") ? path.slice(1) : path;
-  return BASE_PATH ? `${BASE_PATH}/${normalized}` : normalized;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const bp = resolveBasePath();
+  if (bp) {
+    return `${bp}${normalized}`;
+  }
+  // Use relative url (./api/...) so browsers stay scoped to current directory.
+  return `.${normalized}`;
 };
 
 const COUNTRIES = [
