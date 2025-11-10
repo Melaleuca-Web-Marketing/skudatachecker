@@ -2,8 +2,13 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   basePath: '/skudatachecker',
-  // you're on HTTP right now, so include http://
   allowedDevOrigins: ['http://usifhqtsagrqt01.melaleuca.net'],
+  async rewrites() {
+    return [
+      // Make API work under the basePath in dev/prod
+      { source: '/skudatachecker/api/:path*', destination: '/api/:path*' },
+    ];
+  },
 };
 
 export default nextConfig;
