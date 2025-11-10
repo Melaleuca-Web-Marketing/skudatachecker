@@ -28,6 +28,9 @@ type Row = {
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "sku-data-theme";
 
+// Always resolve API path relative to the current page (respects /skudatachecker base path)
+const withBasePath = (path: string) => `./${path.replace(/^\/+/, "")}`;
+
 const COUNTRIES = [
   "UnitedStates",
   "Canada",
@@ -157,7 +160,7 @@ export default function Page() {
 
     const skus = skusPreview;
     try {
-      const res = await fetch("api/sku-info", {
+      const res = await fetch(withBasePath("api/sku-info"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -452,10 +455,7 @@ export default function Page() {
                               <div key={`${r.sku}-${detail.kitSku}`} className="text-slate-600">
                                 <span className="font-medium text-slate-900">{detail.kitSku}</span>
                                 {detail.availableSelections?.length ? (
-                                  <span className="text-slate-500">
-                                    {" "}
-                                    ({detail.availableSelections.join(", ")})
-                                  </span>
+                                  <span className="text-slate-500"> ({detail.availableSelections.join(", ")})</span>
                                 ) : null}
                               </div>
                             ))}
