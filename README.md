@@ -17,7 +17,7 @@ pnpm install   # or npm install / yarn
 pnpm dev       # starts Next.js dev server on http://localhost:3000
 ```
 
-Environment variables are not required for development; the DataForge API URL is hard-coded in `app/api/sku-info/route.ts`. If your environment requires a corporate CA, set `ALLOW_INSECURE_TLS=true` when running the dev server to skip certificate validation.
+Environment variables are not required for development; the DataForge API URL is hard-coded in `app/api/sku-info/route.ts`. If your environment requires a corporate CA, set `ALLOW_INSECURE_TLS=true` when running the dev server to skip certificate validation. When deploying under a subdirectory, expose `NEXT_PUBLIC_BASE_PATH` (for example `/skudatachecker`) so the client automatically prefixes API calls.
 
 ## Scripts
 

@@ -27,6 +27,11 @@ type Row = {
 
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "sku-data-theme";
+const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+const withBasePath = (path: string) => {
+  const normalized = path.startsWith("/") ? path.slice(1) : path;
+  return BASE_PATH ? `${BASE_PATH}/${normalized}` : normalized;
+};
 
 const COUNTRIES = [
   "UnitedStates",
@@ -157,7 +162,7 @@ export default function Page() {
 
     const skus = skusPreview;
     try {
-      const res = await fetch("api/sku-info", {
+      const res = await fetch(withBasePath("api/sku-info"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
