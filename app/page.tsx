@@ -157,7 +157,7 @@ export default function Page() {
 
     const skus = skusPreview;
     try {
-      const res = await fetch("/api/sku-info", {
+      const res = await fetch("api/sku-info", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
