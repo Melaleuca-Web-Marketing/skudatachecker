@@ -28,49 +28,32 @@ type Row = {
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "sku-data-theme";
 
-// Always resolve API path relative to the current page (respects /skudatachecker base path)
-const withBasePath = (path: string) => `./${path.replace(/^\/+/, "")}`;
+/** Build an API URL that always stays under the current base path (e.g. /skudatachecker). */
+function apiUrl(path: string) {
+  const clean = path.replace(/^\/+/, ""); // strip any leading slash
+  if (typeof window !== "undefined") {
+    // Prefer Next's basePath if present (set when you have basePath in next.config)
+    const bp = (window as any).__NEXT_DATA__?.basePath as string | undefined;
+    if (bp) {
+      // Ensure single slashes; avoid double // if bp already has a slash
+      return `${bp.replace(/\/$/, "")}/${clean}`;
+    }
+    // Fall back to resolving relative to the current page URL (handles no-trailing-slash case)
+    return new URL(`./${clean}`, window.location.href).toString();
+  }
+  // On the server we just return an absolute path; client will do the real call.
+  return `/${clean}`;
+}
 
 const COUNTRIES = [
-  "UnitedStates",
-  "Canada",
-  "Taiwan",
-  "Japan",
-  "HongKong",
-  "Australia",
-  "Korea",
-  "NewZealand",
-  "UnitedKingdom",
-  "Ireland",
-  "Netherlands",
-  "Singapore",
-  "China",
-  "Malaysia",
-  "Germany",
-  "Mexico",
-  "Austria",
-  "Hungary",
-  "Poland",
-  "Spain",
-  "Lithuania",
-  "Latvia",
-  "Estonia",
-  "Philippines",
-  "Italy",
-  "Belgium",
-  "Luxembourg",
+  "UnitedStates","Canada","Taiwan","Japan","HongKong","Australia","Korea","NewZealand",
+  "UnitedKingdom","Ireland","Netherlands","Singapore","China","Malaysia","Germany","Mexico",
+  "Austria","Hungary","Poland","Spain","Lithuania","Latvia","Estonia","Philippines","Italy",
+  "Belgium","Luxembourg",
 ];
 
 const SYSTEMS = [
-  "NorthAmerica",
-  "Taiwan",
-  "Japan",
-  "Australia",
-  "Korea",
-  "Europe",
-  "Singapore",
-  "China",
-  "Philippines",
+  "NorthAmerica","Taiwan","Japan","Australia","Korea","Europe","Singapore","China","Philippines",
 ];
 
 export default function Page() {
@@ -126,9 +109,7 @@ export default function Page() {
   function formatDisplayDate(value?: string | null, fallback = "--") {
     if (!value) return fallback;
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return value;
-    }
+    if (Number.isNaN(date.getTime())) return value;
     const month = String(date.getUTCMonth() + 1).padStart(2, "0");
     const day = String(date.getUTCDate()).padStart(2, "0");
     const year = date.getUTCFullYear();
@@ -160,7 +141,8 @@ export default function Page() {
 
     const skus = skusPreview;
     try {
-      const res = await fetch(withBasePath("api/sku-info"), {
+      const url = apiUrl("api/sku-info");
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -187,25 +169,9 @@ export default function Page() {
   function toCsv() {
     if (!rows?.length) return "";
     const headers = [
-      "SKU",
-      "Name",
-      "ProductNames",
-      "RegularPrice",
-      "PreferredPrice",
-      "Points",
-      "Shippable",
-      "Commissionable",
-      "Hidden",
-      "Weight",
-      "WeightUnits",
-      "Channel",
-      "StartDate",
-      "EndDate",
-      "KitType",
-      "OffSaleStartDate",
-      "OffSaleExpirationDate",
-      "KitDetails",
-      "Error",
+      "SKU","Name","ProductNames","RegularPrice","PreferredPrice","Points","Shippable","Commissionable",
+      "Hidden","Weight","WeightUnits","Channel","StartDate","EndDate","KitType","OffSaleStartDate",
+      "OffSaleExpirationDate","KitDetails","Error",
     ];
     const escape = (v: any) => {
       if (v === null || v === undefined) return "";
@@ -235,9 +201,7 @@ export default function Page() {
           r.offSaleExpirationDate ? formatDisplayDate(r.offSaleExpirationDate, "") : "",
           summarizeKitDetails(r.kitDetails),
           r.error ?? "",
-        ]
-          .map(escape)
-          .join(",")
+        ].map(escape).join(",")
       ),
     ];
     return lines.join("\n");
@@ -270,7 +234,10 @@ export default function Page() {
             the target context, and receive clean tabular results with export-ready data.
           </p>
           <div className="mt-6 flex justify-center gap-3">
-            {themeOptions.map((option) => {
+            {[
+              { value: "light" as const, label: "Light" },
+              { value: "dark" as const, label: "Dark" },
+            ].map((option) => {
               const isActive = theme === option.value;
               return (
                 <button
@@ -326,9 +293,7 @@ export default function Page() {
                   onChange={(e) => setCountry(e.target.value)}
                 >
                   {COUNTRIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </label>
@@ -341,9 +306,7 @@ export default function Page() {
                   onChange={(e) => setSystem(e.target.value)}
                 >
                   {SYSTEMS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </label>
