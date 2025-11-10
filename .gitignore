@@ -1,1 +1,17 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Builds
+dist/
+*.log
+
+# Env / secrets
+.env*
+
+# OS
+.DS_Store
+Thumbs.db
