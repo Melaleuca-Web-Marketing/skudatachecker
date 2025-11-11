@@ -27,18 +27,30 @@ type Row = {
 
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "sku-data-theme";
-const getBasePath = () => {
+const BUILD_BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+
+function resolveBasePath(): string {
   if (typeof window !== "undefined") {
-    const bp = (window as any).__NEXT_DATA__?.basePath;
-    if (bp) return String(bp);
+    const data = (window as any).__NEXT_DATA__;
+    if (data?.basePath) return String(data.basePath);
+    const baseEl = document.querySelector("base[href]") as HTMLBaseElement | null;
+    if (baseEl?.href) {
+      try {
+        return new URL(baseEl.href).pathname.replace(/\/$/, "");
+      } catch {
+        // ignore parse errors and fall through
+      }
+    }
   }
-  return process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-};
-const withBasePath = (p: string) => {
-  const bp = getBasePath().replace(/\/$/, "");
-  const path = p.startsWith("/") ? p : `/${p}`;
-  return `${bp}${path}`;
-};
+  return BUILD_BASE_PATH;
+}
+
+function withBasePath(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const bp = resolveBasePath();
+  if (bp) return `${bp}${normalized}`;
+  return `.${normalized}`;
+}
 
 const COUNTRIES = [
   "UnitedStates","Canada","Taiwan","Japan","HongKong","Australia","Korea","NewZealand",
@@ -136,7 +148,7 @@ export default function Page() {
 
     const skus = skusPreview;
     try {
-      const res = await fetch(withBasePath("/api/sku-info"), {
+      const res = await fetch(withBasePath("api/sku-info"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
