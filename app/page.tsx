@@ -27,23 +27,18 @@ type Row = {
 
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "sku-data-theme";
-
-/** Build an API URL that always stays under the current base path (e.g. /skudatachecker). */
-function apiUrl(path: string) {
-  const clean = path.replace(/^\/+/, ""); // strip any leading slash
+const getBasePath = () => {
   if (typeof window !== "undefined") {
-    // Prefer Next's basePath if present (set when you have basePath in next.config)
-    const bp = (window as any).__NEXT_DATA__?.basePath as string | undefined;
-    if (bp) {
-      // Ensure single slashes; avoid double // if bp already has a slash
-      return `${bp.replace(/\/$/, "")}/${clean}`;
-    }
-    // Fall back to resolving relative to the current page URL (handles no-trailing-slash case)
-    return new URL(`./${clean}`, window.location.href).toString();
+    const bp = (window as any).__NEXT_DATA__?.basePath;
+    if (bp) return String(bp);
   }
-  // On the server we just return an absolute path; client will do the real call.
-  return `/${clean}`;
-}
+  return process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+};
+const withBasePath = (p: string) => {
+  const bp = getBasePath().replace(/\/$/, "");
+  const path = p.startsWith("/") ? p : `/${p}`;
+  return `${bp}${path}`;
+};
 
 const COUNTRIES = [
   "UnitedStates","Canada","Taiwan","Japan","HongKong","Australia","Korea","NewZealand",
@@ -141,8 +136,7 @@ export default function Page() {
 
     const skus = skusPreview;
     try {
-      const url = apiUrl("api/sku-info");
-      const res = await fetch(url, {
+      const res = await fetch(withBasePath("/api/sku-info"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
