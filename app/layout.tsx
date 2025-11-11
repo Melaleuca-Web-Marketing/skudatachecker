@@ -11,12 +11,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
-  const baseHref = basePath ? `${basePath}/` : "";
+  const bp = (process.env.NEXT_PUBLIC_BASE_PATH ?? "/skudatachecker").replace(/\/$/, "");
+  const baseHref = `${bp}/`;
 
   return (
     <html lang="en">
-      <head>{baseHref ? <base href={baseHref} /> : null}</head>
+      <head>
+        <base href={baseHref} />
+      </head>
       <body>{children}</body>
     </html>
   );
