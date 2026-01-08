@@ -1,40 +1,79 @@
-# SKU Data Checker
+# SKU Data Dashboard
 
-SKU Data Checker is a lightweight Next.js app for bulk validating product metadata across Melaleuca markets. Paste any number of SKUs, pick the context (country, system, culture, channel), and review normalized results right in the browser or export them to CSV for downstream tools.
+Next.js + TypeScript app that queries a SQL Server source (USPProd_Sandbox) and renders a sectioned dashboard for SKUs: descriptions, details, channel availability, pricing, points, kits, and more. The table supports per-section expand/collapse, section visibility toggles, and a sticky SKU column to keep identifiers in view while scrolling.
 
 ## Features
-
-- Modern Next.js App Router stack with TypeScript and Tailwind CSS (light/dark switcher included)
-- Bulk SKU submission with duplicate filtering and live status counters
-- Serverless API route that calls the DataForge endpoint with concurrency + TLS handling
-- Tabular results that surface core merchandising details (pricing, kit info, channel availability)
-- One-click CSV export mirroring the table data
+- Live SQL Server-backed `/api/dashboard` endpoint (no mock data required)
+- Paste multiple SKUs, dedupe, and run a single query against all sections
+- Per-section expand/collapse with summaries; sticky SKU column for horizontal scrolling
+- Section visibility toggles to hide/show data groups
+- Works with SQL auth or Windows (NTLM) auth; configurable connection settings
 
 ## Getting Started
-
 ```bash
-pnpm install   # or npm install / yarn
-pnpm dev       # starts Next.js dev server on http://localhost:3000
+npm install
+npm run dev    # http://localhost:3000
 ```
 
-Environment variables are not required for development; the DataForge API URL is hard-coded in `app/api/sku-info/route.ts`. If your environment requires a corporate CA, set `ALLOW_INSECURE_TLS=true` when running the dev server to skip certificate validation. When deploying under a subdirectory, expose `NEXT_PUBLIC_BASE_PATH` (for example `/skudatachecker`) so the client automatically prefixes API calls.
+### Environment (.env.local)
+Configure SQL Server access. Example using SQL auth:
+```
+DB_WINDOWS_AUTH=false
+DB_HOST=localhost\SQLEXPRESS
+DB_PORT=1433
+DB_NAME=USPProd_Sandbox
+DB_USER=dashboard_user
+DB_PASSWORD=TempPwd!234
+DB_ENCRYPT=false
+DB_TRUST_SERVER_CERT=true
+DB_USE_NAMED_PIPE=false
+```
+For Windows auth, set `DB_WINDOWS_AUTH=true` and (if needed) `DB_DOMAIN`, `DB_USER`, `DB_PASSWORD`. Ensure the SQL instance is reachable over TCP (enable TCP/IP and set a port).
 
-## Scripts
+## API
+`POST /api/dashboard`
+```json
+{
+  "skus": ["117", "5048"],
+  "asOfDate": null,
+  "channelId": null,
+  "channelTypeId": null,
+  "availableOnly": 0,
+  "languageId": null
+}
+```
+Response:
+```json
+{
+  "rows": [
+    {
+      "sku": "70391",
+      "description": [ ... ],
+      "details": [ ... ],
+      "channelAvailability": [ ... ],
+      "pricing": [ ... ],
+      "productPoints": [ ... ],
+      "kitDetails": [ ... ],
+      "businessRules": [ ... ],   // currently empty until a source is provided
+      "skuCounters": [ ... ]      // currently empty until a source is provided
+    }
+  ],
+  "meta": { "rowCount": 1 }
+}
+```
+Each section is returned as an array to support multiple countries/channels/price types.
 
-| Command        | Description                         |
-| -------------- | ----------------------------------- |
-| `pnpm dev`     | Run Next.js in development mode     |
-| `pnpm build`   | Production build with Turbopack     |
-| `pnpm start`   | Serve the production build          |
-| `pnpm lint`    | (Optional) add your linting command |
+## UI Usage
+1) Paste SKUs (separated by commas, spaces, or new lines).
+2) Click **Search** to query the database.
+3) Use section headers to expand/collapse columns; use the visibility toggles to hide/show sections.
 
 ## Project Structure
+- `app/page.tsx` – dashboard UI (SKU input, toggles, table)
+- `app/api/dashboard/route.ts` – SQL-backed API for multi-section SKU data
+- `lib/db.ts` – SQL Server connection helper (supports SQL or Windows auth)
+- `app/layout.tsx`, `app/globals.css` – layout and global styles
 
-- `app/page.tsx` – main UI with the form, status cards, and results table
-- `app/api/sku-info/route.ts` – server action that fetches SKU data
-- `app/globals.css` – Tailwind base styles
-- `tailwind.config.js` & `postcss.config.js` – styling pipeline config
-
-## Deployment
-
-The app is optimized for platforms that support Next.js (Vercel, Netlify, Azure Static Web Apps, etc.). Ensure the environment variable `ALLOW_INSECURE_TLS` is configured appropriately for the target network.
+## Notes
+- Business rules and SKU counters are placeholders until a data source/table is provided.
+- If the SQL instance uses a non-default port, set `DB_PORT` accordingly. Ensure TCP/IP is enabled on SQLEXPRESS.
