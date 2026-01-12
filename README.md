@@ -1,34 +1,27 @@
 # SKU Data Dashboard
 
-Next.js + TypeScript app that queries a SQL Server source (USPProd_Sandbox) and renders a sectioned dashboard for SKUs: descriptions, details, channel availability, pricing, points, kits, and more. The table supports per-section expand/collapse, section visibility toggles, and a sticky SKU column to keep identifiers in view while scrolling.
+Next.js + TypeScript app that renders a sectioned dashboard for SKUs: descriptions, details, channel availability, pricing, points, kits, and more. The table supports per-section expand/collapse, section visibility toggles, and a sticky SKU column to keep identifiers in view while scrolling.
 
 ## Features
-- Live SQL Server-backed `/api/dashboard` endpoint (no mock data required)
-- Paste multiple SKUs, dedupe, and run a single query against all sections
+- `/api/dashboard` endpoint that returns placeholder data for the UI
+- Paste multiple SKUs, dedupe, and fetch a single response covering all sections
 - Per-section expand/collapse with summaries; sticky SKU column for horizontal scrolling
 - Section visibility toggles to hide/show data groups
-- Works with SQL auth or Windows (NTLM) auth; configurable connection settings
 
 ## Getting Started
 ```bash
 npm install
-npm run dev    # http://localhost:3000
+npm run dev    # http://localhost:3000 (or 3001 if 3000 is busy)
+npm run build
+npm run start  # http://localhost:3001
 ```
 
 ### Environment (.env.local)
-Configure SQL Server access. Example using SQL auth:
+Optional base path when hosting under a subfolder (example):
 ```
-DB_WINDOWS_AUTH=false
-DB_HOST=localhost\SQLEXPRESS
-DB_PORT=1433
-DB_NAME=USPProd_Sandbox
-DB_USER=dashboard_user
-DB_PASSWORD=TempPwd!234
-DB_ENCRYPT=false
-DB_TRUST_SERVER_CERT=true
-DB_USE_NAMED_PIPE=false
+NEXT_PUBLIC_BASE_PATH=/skudatachecker
 ```
-For Windows auth, set `DB_WINDOWS_AUTH=true` and (if needed) `DB_DOMAIN`, `DB_USER`, `DB_PASSWORD`. Ensure the SQL instance is reachable over TCP (enable TCP/IP and set a port).
+When running in production under a subfolder, open the app at `/skudatachecker`.
 
 ## API
 `POST /api/dashboard`
@@ -54,8 +47,8 @@ Response:
       "pricing": [ ... ],
       "productPoints": [ ... ],
       "kitDetails": [ ... ],
-      "businessRules": [ ... ],   // currently empty until a source is provided
-      "skuCounters": [ ... ]      // currently empty until a source is provided
+      "businessRules": [ ... ],
+      "skuCounters": [ ... ]
     }
   ],
   "meta": { "rowCount": 1 }
@@ -65,15 +58,13 @@ Each section is returned as an array to support multiple countries/channels/pric
 
 ## UI Usage
 1) Paste SKUs (separated by commas, spaces, or new lines).
-2) Click **Search** to query the database.
+2) Click **Search** to generate the dashboard.
 3) Use section headers to expand/collapse columns; use the visibility toggles to hide/show sections.
 
 ## Project Structure
 - `app/page.tsx` – dashboard UI (SKU input, toggles, table)
-- `app/api/dashboard/route.ts` – SQL-backed API for multi-section SKU data
-- `lib/db.ts` – SQL Server connection helper (supports SQL or Windows auth)
+- `app/api/dashboard/route.ts` – placeholder API for multi-section SKU data
 - `app/layout.tsx`, `app/globals.css` – layout and global styles
 
 ## Notes
-- Business rules and SKU counters are placeholders until a data source/table is provided.
-- If the SQL instance uses a non-default port, set `DB_PORT` accordingly. Ensure TCP/IP is enabled on SQLEXPRESS.
+- The API currently returns placeholder data. This will be replaced with an external data API when it becomes available.
