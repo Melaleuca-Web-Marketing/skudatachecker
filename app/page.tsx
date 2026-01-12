@@ -175,6 +175,19 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
 });
 
+function getDashboardApiPath() {
+  const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+  if (basePath) {
+    return `${basePath}/api/dashboard`;
+  }
+  if (typeof window === "undefined") {
+    return "api/dashboard";
+  }
+  const path = window.location.pathname;
+  const normalized = path.endsWith("/") ? path : `${path}/`;
+  return `${normalized}api/dashboard`;
+}
+
 const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
   skuInfo: {
     key: "skuInfo",
@@ -483,7 +496,7 @@ export default function Page() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/dashboard", {
+      const res = await fetch(getDashboardApiPath(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
