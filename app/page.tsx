@@ -7,7 +7,6 @@ import leafDark from "../assets/leaf-dark.png";
 import dropDark from "../assets/leaf-dark.png";
 
 type DescriptionRow = {
-  sku: string;
   country: string;
   language: string;
   productName: string;
@@ -16,24 +15,41 @@ type DescriptionRow = {
 };
 
 type DetailsRow = {
-  sku: string;
   country: string;
   kitType: string;
   startDate: string;
   endDate: string;
+  standardWeight: string;
+  freightable: boolean;
+  shippable: boolean;
+  commissionable: boolean;
+  memberOnly: boolean;
+  coo: string;
+  tariffCode: string;
+};
+
+type IngredientsRow = {
+  country: string;
+  culture: string;
+  productName: string;
+  ingredientName: string;
+  shortDescription: string;
+  allSort: number;
+  keySort: number;
+  modalCtaText: string;
+  modalCtaLink: string;
 };
 
 type ChannelAvailabilityRow = {
-  sku: string;
   country: string;
   warehouse: string;
   salesChannel: string;
   startDate: string;
   endDate: string;
+  available: boolean;
 };
 
 type PricingRow = {
-  sku: string;
   country: string;
   priceType: string;
   price: number;
@@ -42,18 +58,17 @@ type PricingRow = {
 };
 
 type ProductPointsRow = {
-  sku: string;
   country: string;
-  pointsType: string;
-  pointsValue: number;
+  productPointsType: string;
   startDate: string;
   endDate: string;
 };
 
 type KitDetailsRow = {
-  sku: string;
   country: string;
   quantity: number;
+  sortOrder: number;
+  newSortOrder: number;
   parentSku: string;
   childSku: string;
   childSkuDescription: string;
@@ -63,15 +78,42 @@ type KitDetailsRow = {
 };
 
 type BusinessRuleRow = {
-  sku: string;
   country: string;
   businessRule: string;
   startDate: string;
   endDate: string;
+  itemUnitQty: number;
+  maxQty: number;
+  bundleMaxWeight: number;
+  productCategoryIden: string;
+  shipToCountry: string;
+  shipToCountryIden: string;
+  ruleSku: string;
+  notificationLocalizationKey: string;
+  generalSupportingData: string;
+};
+
+type ProductBayLocationRow = {
+  country: string;
+  warehouse: string;
+  bayLocation: string;
+};
+
+type ProductDimensionRow = {
+  country: string;
+  unit: string;
+  height: number;
+  width: number;
+  depth: number;
+};
+
+type ProductWeightRow = {
+  country: string;
+  weightAmount: number;
+  weightUnit: string;
 };
 
 type SkuCounterRow = {
-  sku: string;
   country: string;
   warehouse: string;
   onHand: number;
@@ -79,16 +121,27 @@ type SkuCounterRow = {
   available: number;
 };
 
+type CustomsDetailsRow = {
+  country: string;
+  euTariffCode: string;
+  standardCostEur: number;
+};
+
 type SectionRowMap = {
   skuInfo: { sku: string }[];
   description: DescriptionRow[];
   details: DetailsRow[];
+  ingredients: IngredientsRow[];
   channelAvailability: ChannelAvailabilityRow[];
   pricing: PricingRow[];
   productPoints: ProductPointsRow[];
   kitDetails: KitDetailsRow[];
   businessRules: BusinessRuleRow[];
+  productBayLocation: ProductBayLocationRow[];
+  productDimension: ProductDimensionRow[];
+  productWeight: ProductWeightRow[];
   skuCounters: SkuCounterRow[];
+  customsDetails: CustomsDetailsRow[];
 };
 
 type SectionKey = keyof SectionRowMap;
@@ -140,24 +193,34 @@ const SECTION_ORDER: SectionKey[] = [
   "skuInfo",
   "description",
   "details",
+  "ingredients",
   "channelAvailability",
   "pricing",
   "productPoints",
   "kitDetails",
   "businessRules",
+  "productBayLocation",
+  "productDimension",
+  "productWeight",
   "skuCounters",
+  "customsDetails",
 ];
 
 const SECTION_ACCENTS: Record<SectionKey, string> = {
   skuInfo: "#a5b4fc", // indigo
   description: "#38bdf8", // sky
   details: "#34d399", // green
+  ingredients: "#facc15", // amber
   channelAvailability: "#f59e0b", // amber
   pricing: "#f87171", // rose
   productPoints: "#e879f9", // fuchsia
   kitDetails: "#10b981", // emerald
   businessRules: "#eab308", // yellow
+  productBayLocation: "#22c55e", // green
+  productDimension: "#0ea5e9", // sky
+  productWeight: "#a855f7", // violet
   skuCounters: "#60a5fa", // blue
+  customsDetails: "#f97316", // orange
 };
 
 const SUMMARY_COLUMN_WIDTH = 150;
@@ -220,7 +283,6 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Language", render: (row) => row.language },
       { header: "Product Name", render: (row) => row.productName },
@@ -247,11 +309,47 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Kit Type", render: (row) => row.kitType },
       { header: "Start Date", render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Standard Weight", render: (row) => row.standardWeight },
+      { header: "Freightable", render: (row) => formatBoolean(row.freightable) },
+      { header: "Shippable", render: (row) => formatBoolean(row.shippable) },
+      { header: "Commissionable", render: (row) => formatBoolean(row.commissionable) },
+      { header: "Member Only", render: (row) => formatBoolean(row.memberOnly) },
+      { header: "CoO", render: (row) => row.coo },
+      { header: "Tariff Code", render: (row) => row.tariffCode },
+    ],
+  },
+  ingredients: {
+    key: "ingredients",
+    title: "Ingredients",
+    blurb: "Ingredient metadata per country and culture.",
+    emptyHint: "No ingredient rows.",
+    summary: (rows) => {
+      const first = rows?.[0];
+      if (!first) return <span className="text-slate-400">--</span>;
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="font-semibold">{first.ingredientName}</p>
+          <p className="text-xs opacity-80">
+            {first.country} · {first.culture}
+            {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
+          </p>
+        </div>
+      );
+    },
+    columns: [
+      { header: "Country", render: (row) => row.country },
+      { header: "Culture", render: (row) => row.culture },
+      { header: "Product Name", render: (row) => row.productName },
+      { header: "Ingredient Name", render: (row) => row.ingredientName },
+      { header: "Short Description", className: "max-w-xs", render: (row) => row.shortDescription },
+      { header: "All Sort", className: "text-right font-mono", render: (row) => row.allSort },
+      { header: "Key Sort", className: "text-right font-mono", render: (row) => row.keySort },
+      { header: "Modal CTA Text", render: (row) => row.modalCtaText },
+      { header: "Modal CTA Link", className: "max-w-xs", render: (row) => row.modalCtaLink },
     ],
   },
   channelAvailability: {
@@ -273,12 +371,12 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Warehouse", render: (row) => row.warehouse },
       { header: "Sales Channel", render: (row) => row.salesChannel },
       { header: "Start Date", render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Available", render: (row) => formatBoolean(row.available) },
     ],
   },
   pricing: {
@@ -300,7 +398,6 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Price Type", render: (row) => row.priceType },
       { header: "Price", className: "text-right font-mono", render: (row) => currencyFormatter.format(row.price) },
@@ -318,19 +415,17 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       if (!first) return <span className="text-slate-400">--</span>;
       return (
         <div className="space-y-1 text-sm">
-          <p className="font-semibold">{first.pointsType}</p>
+          <p className="font-semibold">{first.productPointsType}</p>
           <p className="text-xs opacity-80">
-            {first.pointsValue.toLocaleString()} pts
+            {first.country}
             {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
           </p>
         </div>
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
-      { header: "Product Points Type", render: (row) => row.pointsType },
-      { header: "Product Points Value", className: "text-right font-mono", render: (row) => row.pointsValue.toLocaleString() },
+      { header: "Product Points Type", render: (row) => row.productPointsType },
       { header: "Start Date", render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", render: (row) => formatDisplayDate(row.endDate) },
     ],
@@ -354,9 +449,10 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Quantity", className: "text-right font-mono", render: (row) => row.quantity },
+      { header: "Sort Order", className: "text-right font-mono", render: (row) => row.sortOrder },
+      { header: "New Sort Order", className: "text-right font-mono", render: (row) => row.newSortOrder },
       { header: "Parent SKU", render: (row) => row.parentSku },
       { header: "Child SKU", render: (row) => row.childSku },
       { header: "Child SKU Description", render: (row) => row.childSkuDescription },
@@ -384,11 +480,93 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Business Rule", render: (row) => row.businessRule },
       { header: "Start Date", render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Item Unit Qty", className: "text-right font-mono", render: (row) => row.itemUnitQty },
+      { header: "Max Qty", className: "text-right font-mono", render: (row) => row.maxQty },
+      { header: "Bundle Max Weight", className: "text-right font-mono", render: (row) => row.bundleMaxWeight },
+      { header: "Product Category Iden", render: (row) => row.productCategoryIden },
+      { header: "Ship To Country", render: (row) => row.shipToCountry },
+      { header: "Ship To Country Iden", render: (row) => row.shipToCountryIden },
+      { header: "Rule SKU", render: (row) => row.ruleSku },
+      { header: "Notification Localization Key", className: "max-w-xs", render: (row) => row.notificationLocalizationKey },
+      { header: "General Supporting Data", className: "max-w-xs", render: (row) => row.generalSupportingData },
+    ],
+  },
+  productBayLocation: {
+    key: "productBayLocation",
+    title: "Product Bay Location",
+    blurb: "Warehouse bay positions.",
+    emptyHint: "No bay location rows.",
+    summary: (rows) => {
+      const first = rows?.[0];
+      if (!first) return <span className="text-slate-400">--</span>;
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="font-semibold">{first.bayLocation}</p>
+          <p className="text-xs opacity-80">
+            {first.country} · {first.warehouse}
+            {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
+          </p>
+        </div>
+      );
+    },
+    columns: [
+      { header: "Country", render: (row) => row.country },
+      { header: "Warehouse", render: (row) => row.warehouse },
+      { header: "Bay Location", render: (row) => row.bayLocation },
+    ],
+  },
+  productDimension: {
+    key: "productDimension",
+    title: "Product Dimension",
+    blurb: "Pack dimensions by unit.",
+    emptyHint: "No dimension rows.",
+    summary: (rows) => {
+      const first = rows?.[0];
+      if (!first) return <span className="text-slate-400">--</span>;
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="font-semibold">{first.unit}</p>
+          <p className="text-xs opacity-80">
+            {first.country} · {first.height} × {first.width} × {first.depth}
+            {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
+          </p>
+        </div>
+      );
+    },
+    columns: [
+      { header: "Country", render: (row) => row.country },
+      { header: "Unit", render: (row) => row.unit },
+      { header: "Height", className: "text-right font-mono", render: (row) => row.height },
+      { header: "Width", className: "text-right font-mono", render: (row) => row.width },
+      { header: "Depth", className: "text-right font-mono", render: (row) => row.depth },
+    ],
+  },
+  productWeight: {
+    key: "productWeight",
+    title: "Product Weight",
+    blurb: "Weight amounts by unit.",
+    emptyHint: "No weight rows.",
+    summary: (rows) => {
+      const first = rows?.[0];
+      if (!first) return <span className="text-slate-400">--</span>;
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="font-semibold">{first.weightAmount} {first.weightUnit}</p>
+          <p className="text-xs opacity-80">
+            {first.country}
+            {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
+          </p>
+        </div>
+      );
+    },
+    columns: [
+      { header: "Country", render: (row) => row.country },
+      { header: "Weight Amount", className: "text-right font-mono", render: (row) => row.weightAmount },
+      { header: "Weight Unit", render: (row) => row.weightUnit },
     ],
   },
   skuCounters: {
@@ -410,12 +588,35 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "SKU", className: "font-semibold", render: (row) => row.sku },
       { header: "Country", render: (row) => row.country },
       { header: "Warehouse", render: (row) => row.warehouse },
       { header: "On Hand", className: "text-right font-mono", render: (row) => row.onHand.toLocaleString() },
       { header: "Pending", className: "text-right font-mono", render: (row) => row.pending.toLocaleString() },
       { header: "Available", className: "text-right font-mono", render: (row) => row.available.toLocaleString() },
+    ],
+  },
+  customsDetails: {
+    key: "customsDetails",
+    title: "Customs Details",
+    blurb: "Tariff and standard cost reference.",
+    emptyHint: "No customs rows.",
+    summary: (rows) => {
+      const first = rows?.[0];
+      if (!first) return <span className="text-slate-400">--</span>;
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="font-semibold">{first.euTariffCode}</p>
+          <p className="text-xs opacity-80">
+            {first.country} · {currencyFormatter.format(first.standardCostEur)}
+            {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
+          </p>
+        </div>
+      );
+    },
+    columns: [
+      { header: "Country", render: (row) => row.country },
+      { header: "EU Tariff Code", render: (row) => row.euTariffCode },
+      { header: "07 Standard Cost [EUR]", className: "text-right font-mono", render: (row) => currencyFormatter.format(row.standardCostEur) },
     ],
   },
 };
@@ -1315,13 +1516,14 @@ function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isD
   const width = expanded ? 0 : SUMMARY_COLUMN_WIDTH;
   const tint = `${accent}22`;
   const collapsedTint = `${accent}12`;
+  const solidBg = isDark ? "#0f172a" : "#ffffff";
   return {
     width,
     maxWidth: width,
     minWidth: width,
     paddingInline: expanded ? 0 : undefined,
     overflow: "hidden",
-    backgroundColor: expanded ? tint : collapsedTint,
+    backgroundColor: sticky ? solidBg : expanded ? tint : collapsedTint,
     boxShadow: expanded ? `inset -2px 0 0 ${accent}33` : "none",
     color: isDark ? "#e5e7eb" : "#0f172a",
     transition: "all 0.5s ease",
@@ -1346,13 +1548,14 @@ function detailCellStyle(
   const width = expanded ? DETAIL_COLUMN_WIDTH : 0;
   const tint = `${accent}18`;
   const collapsedTint = `${accent}10`;
+  const solidBg = isDark ? "#0f172a" : "#ffffff";
   return {
     width,
     maxWidth: width,
     minWidth: width,
     paddingInline: expanded ? undefined : 0,
     overflow: "hidden",
-    backgroundColor: expanded ? tint : collapsedTint,
+    backgroundColor: typeof stickyLeft === "number" ? solidBg : expanded ? tint : collapsedTint,
     boxShadow: expanded ? `inset -1px 0 0 ${accent}30` : "none",
     color: isDark ? "#e5e7eb" : "#0f172a",
     transition: "all 0.5s ease",
@@ -1427,4 +1630,9 @@ function formatDisplayDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return dateFormatter.format(date);
+}
+
+function formatBoolean(value?: boolean | null) {
+  if (value === null || value === undefined) return "--";
+  return value ? "Yes" : "No";
 }
