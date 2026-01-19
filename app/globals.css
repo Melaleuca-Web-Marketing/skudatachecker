@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.section-header-cell {
+  position: relative;
+  border-bottom: 0;
+}
+
+.section-header-cell.sticky {
+  position: sticky;
+}
+
+.section-header-cell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Offset keeps the header accent from bleeding with the first data row border. */
+  bottom: 1px;
+  height: 4px;
+  background: var(--section-accent, transparent);
+  pointer-events: none;
+  z-index: 2;
+}

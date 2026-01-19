@@ -1126,7 +1126,7 @@ function CombinedSectionsTable({
       </div>
 
       <div className={`overflow-x-auto rounded-2xl border ${isDark ? "border-slate-800 bg-white/5" : "border-slate-200 bg-white"}`}>
-        <table className={`min-w-full table-auto text-left text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+        <table className={`min-w-full table-auto border-separate border-spacing-0 text-left text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>
           <thead>
             <tr className={`text-xs font-semibold uppercase ${isDark ? "text-slate-300" : "text-slate-500"}`}>
               {sections.map((section, sectionIndex) => {
@@ -1140,7 +1140,7 @@ function CombinedSectionsTable({
                   <th
                     key={`header-group-${section.key}`}
                     colSpan={span}
-                    className={`border-b px-3 py-3 text-left ${
+                    className={`section-header-cell px-3 py-3 text-left ${
                       isSticky
                         ? isDark
                           ? "sticky left-0 z-30 border-slate-700 bg-slate-800 text-slate-200 shadow shadow-indigo-900/30"
@@ -1150,9 +1150,10 @@ function CombinedSectionsTable({
                           : "border-slate-200 bg-slate-50 text-slate-700"
                     }`}
                     style={{
-                      borderBottom: `4px solid ${accent}`,
+                      borderBottom: "0",
                       borderRight: isLast ? undefined : `1px solid ${separator}`,
                       ...(isSticky ? { left: 0 } : {}),
+                      ["--section-accent" as string]: accent,
                     }}
                   >
                     {isSticky ? (
@@ -1255,7 +1256,7 @@ function CombinedSectionsTable({
               rows.map((row, rowIndex) => (
                 <tr
                   key={`row-${row.sku}-${rowIndex}`}
-                  className={`border-t ${isDark ? "border-slate-800 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-900 hover:bg-slate-50"}`}
+                  className={`${rowIndex === 0 ? "border-t-0" : "border-t"} ${isDark ? "border-slate-800 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-900 hover:bg-slate-50"}`}
                 >
                   {sections.flatMap((section, sectionIndex) => {
                     const isSticky = section.key === "skuInfo";
@@ -1516,7 +1517,9 @@ function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isD
   const width = expanded ? 0 : SUMMARY_COLUMN_WIDTH;
   const tint = `${accent}22`;
   const collapsedTint = `${accent}12`;
-  const solidBg = isDark ? "#0f172a" : "#ffffff";
+  const solidBg = isDark ? "#0f172a" : "#f8fafc";
+  const rowDivider = isDark ? "#1e293b" : "#e2e8f0";
+  const stickyShadow = `inset -1px 0 0 rgba(148, 163, 184, 0.3), inset -2px 0 0 ${accent}33, inset 0 -1px 0 ${rowDivider}`;
   return {
     width,
     maxWidth: width,
@@ -1532,7 +1535,7 @@ function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isD
           position: "sticky" as const,
           left: 0,
           zIndex: 25,
-          boxShadow: `inset -1px 0 0 rgba(148, 163, 184, 0.3), inset -2px 0 0 ${accent}33`,
+          boxShadow: stickyShadow,
         }
       : {}),
   };
@@ -1548,7 +1551,8 @@ function detailCellStyle(
   const width = expanded ? DETAIL_COLUMN_WIDTH : 0;
   const tint = `${accent}18`;
   const collapsedTint = `${accent}10`;
-  const solidBg = isDark ? "#0f172a" : "#ffffff";
+  const solidBg = isDark ? "#0f172a" : "#f8fafc";
+  const rowDivider = isDark ? "#1e293b" : "#e2e8f0";
   return {
     width,
     maxWidth: width,
@@ -1564,7 +1568,7 @@ function detailCellStyle(
           position: "sticky" as const,
           left: stickyLeft,
           zIndex: 20,
-          boxShadow: `inset -1px 0 0 rgba(148, 163, 184, 0.2), inset -1px 0 0 ${accent}30`,
+          boxShadow: `inset -1px 0 0 rgba(148, 163, 184, 0.2), inset -1px 0 0 ${accent}30, inset 0 -1px 0 ${rowDivider}`,
         }
       : {}),
   };
