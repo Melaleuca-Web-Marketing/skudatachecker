@@ -1,248 +1,295 @@
 import { NextRequest, NextResponse } from "next/server";
 
-type RequestBody = Filters & {
+// ── Request body from the frontend ───────────────────────────────────────────
+
+type RequestBody = {
   skus?: string[];
+  countryFilter?: "all" | "us" | "ca";
+  softwareSystem?: string;
 };
 
-type Filters = {
-  asOfDate?: string | null;
-  channelId?: number | null;
-  channelTypeId?: number | null;
-  availableOnly?: number | boolean;
-  languageId?: number | null;
+// ── External API response types ───────────────────────────────────────────────
+
+type ApiDescriptionRow = {
+  country: string;
+  language: string;
+  productName: string;
+  shortDescription: string;
+  longDescription: string;
 };
 
-const COUNTRIES = ["United States", "Canada", "Mexico", "United Kingdom", "Australia"];
-const LANGUAGES = ["en-US", "es-MX", "fr-CA", "en-GB"];
-const CULTURES = ["en-US", "es-MX", "fr-CA", "en-GB"];
-const KIT_TYPES = ["Starter", "Bundle", "Sampler", "Core", "Accessory"];
-const SALES_CHANNELS = ["Online", "Retail", "Wholesale", "Partner", "Direct"];
-const WAREHOUSES = ["Warehouse A", "Warehouse B", "Warehouse C"];
-const PRICE_TYPES = ["Retail", "Member", "Promo", "Wholesale"];
-const POINTS_TYPES = ["Base", "Bonus", "Seasonal"];
-const SELECT_TYPES = ["Required", "Optional", "Auto"];
-const BAY_LOCATIONS = ["A1-04", "B3-12", "C2-07", "D4-09"];
-const DIMENSION_UNITS = ["in", "cm"];
-const WEIGHT_UNITS = ["lb", "kg"];
-const PRODUCT_CATEGORIES = ["CAT-100", "CAT-200", "CAT-300"];
-const SHIP_TO_COUNTRIES = ["US", "CA", "MX", "GB", "AU"];
-const BUSINESS_RULES = [
-  "Requires enrollment",
-  "Limited to 2 per order",
-  "Seasonal availability",
-  "Bundle-only pricing",
-];
+type ApiDetailsRow = {
+  country: string;
+  kitType: string;
+  startDate: string;
+  endDate: string;
+  standardWeight: number;
+  freightable: boolean;
+  shippable: boolean;
+  commissionable: boolean;
+  memberOnly: boolean;
+  coO: string;
+  tariffCode: string;
+};
 
-function hashSeed(input: string) {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash * 31 + input.charCodeAt(i)) % 1_000_003;
+type ApiIngredientsRow = {
+  country: string;
+  culture: string;
+  productName: string;
+  ingredientName: string;
+  shortDescription: string;
+  allSort: number;
+  keySort: number;
+  modalCtaText: string;
+  modalCtaLink: string;
+};
+
+type ApiChannelAvailabilityRow = {
+  country: string;
+  warehouse: string;
+  salesChannel: string;
+  startDate: string;
+  endDate: string;
+  available: boolean;
+};
+
+type ApiPricingRow = {
+  country: string;
+  priceType: string;
+  price: number;
+  startDate: string;
+  endDate: string;
+};
+
+type ApiProductPointsRow = {
+  country: string;
+  productPointsType: string;
+  value: number;
+  startDate: string;
+  endDate: string;
+};
+
+type ApiKitDetailsRow = {
+  country: string;
+  quantity: number;
+  sortOrder: number;
+  newSortOrder: number;
+  parentSku: string;
+  childSku: string;
+  childSkuDescription: string;
+  selectType: string;
+  startDate: string;
+  endDate: string;
+};
+
+type ApiBusinessRuleRow = {
+  country: string;
+  businessRule: string;
+  startDate: string;
+  endDate: string;
+  itemUnitQty: number;
+  maxQty: number;
+  bundleMaxWeight: number;
+  productCategoryIden: string;
+  shipToCountry: string;
+  shipToCountryIden: string;
+  ruleSku: string;
+  notificationLocalizationKey: string;
+  generalSupportingData: string;
+};
+
+type ApiProductBayLocationRow = {
+  country: string;
+  warehouse: string;
+  bayLocation: string;
+};
+
+type ApiProductDimensionRow = {
+  country: string;
+  unit: string;
+  height: number;
+  width: number;
+  depth: number;
+};
+
+type ApiProductWeightRow = {
+  country: string;
+  weightAmount: number;
+  weightUnit: string;
+};
+
+type ApiSkuCounterRow = {
+  country: string;
+  warehouse: string;
+  onHand: number;
+  pending: number;
+  available: number;
+};
+
+type ApiCustomsDetailsRow = {
+  country: string;
+  euTariffCode: string;
+  standardCostEur: number | null;
+};
+
+type ApiProductInfo = {
+  descriptions: ApiDescriptionRow[];
+  details: ApiDetailsRow[];
+  ingredients: ApiIngredientsRow[];
+  channelAvailability: ApiChannelAvailabilityRow[];
+  pricing: ApiPricingRow[];
+  productPoints: ApiProductPointsRow[];
+  kitDetails: ApiKitDetailsRow[];
+  productBusinessRules: ApiBusinessRuleRow[];
+  productBayLocation: ApiProductBayLocationRow[];
+  productDimension: ApiProductDimensionRow[];
+  productWeight: ApiProductWeightRow[];
+  productSkuCounter: ApiSkuCounterRow[];
+  customsDetails: ApiCustomsDetailsRow[];
+};
+
+type ApiSkuItem = {
+  sku: string;
+  productInformation: ApiProductInfo;
+};
+
+// ── Config ────────────────────────────────────────────────────────────────────
+
+const BASE_URL = (process.env.PRODUCT_API_BASE_URL ?? "").replace(/\/$/, "");
+const DEFAULT_SOFTWARE_SYSTEM = process.env.PRODUCT_API_SOFTWARE_SYSTEM ?? "NorthAmerica";
+const USER_ID = process.env.PRODUCT_API_USER_ID ?? "";
+
+const COUNTRY_MAP: Record<"us" | "ca", string> = {
+  us: "UnitedStates",
+  ca: "Canada",
+};
+
+// ── Fetch helpers ─────────────────────────────────────────────────────────────
+
+async function fetchSkuData(skus: string[], country: string, softwareSystem: string): Promise<ApiSkuItem[]> {
+  const params = new URLSearchParams();
+  for (const sku of skus) {
+    params.append("skus", sku);
   }
-  return hash;
+  params.set("country", country);
+
+  const url = `${BASE_URL}/v1/Products/GlobalProductInformation?${params.toString()}`;
+  const res = await fetch(url, {
+    headers: {
+      accept: "text/plain",
+      SoftwareSystem: softwareSystem,
+      UserId: USER_ID,
+      CorrelationId: "asdf",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Upstream API returned ${res.status} for country=${country}`);
+  }
+
+  return res.json() as Promise<ApiSkuItem[]>;
 }
 
-function pick<T>(values: T[], seed: number, offset: number) {
-  return values[(seed + offset) % values.length];
+function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
+  target.descriptions.push(...source.descriptions);
+  target.details.push(...source.details);
+  target.ingredients.push(...source.ingredients);
+  target.channelAvailability.push(...source.channelAvailability);
+  target.pricing.push(...source.pricing);
+  target.productPoints.push(...source.productPoints);
+  target.kitDetails.push(...source.kitDetails);
+  target.productBusinessRules.push(...source.productBusinessRules);
+  target.productBayLocation.push(...source.productBayLocation);
+  target.productDimension.push(...source.productDimension);
+  target.productWeight.push(...source.productWeight);
+  target.productSkuCounter.push(...source.productSkuCounter);
+  target.customsDetails.push(...source.customsDetails);
 }
 
-function formatDate(year: number, month: number, day: number) {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.toISOString().slice(0, 10);
-}
+// ── Transform API shape → frontend DashboardRow shape ────────────────────────
 
-function buildDateRange(seed: number) {
-  const startYear = 2022 + (seed % 3);
-  const startMonth = (seed % 12) + 1;
-  const endYear = startYear + 1;
-  const endMonth = ((seed + 6) % 12) + 1;
+function transformItem(item: ApiSkuItem) {
+  const info = item.productInformation;
   return {
-    startDate: formatDate(startYear, startMonth, ((seed % 27) + 1)),
-    endDate: formatDate(endYear, endMonth, ((seed % 27) + 1)),
+    sku: item.sku,
+    skuInfo: [{ sku: item.sku }],
+    description: info.descriptions,
+    details: info.details.map((d) => ({
+      country: d.country,
+      kitType: d.kitType,
+      startDate: d.startDate,
+      endDate: d.endDate,
+      standardWeight: d.standardWeight,
+      freightable: d.freightable,
+      shippable: d.shippable,
+      commissionable: d.commissionable,
+      memberOnly: d.memberOnly,
+      coo: d.coO,
+      tariffCode: d.tariffCode,
+    })),
+    ingredients: info.ingredients,
+    channelAvailability: info.channelAvailability,
+    pricing: info.pricing,
+    productPoints: info.productPoints,
+    kitDetails: info.kitDetails,
+    businessRules: info.productBusinessRules,
+    productBayLocation: info.productBayLocation,
+    productDimension: info.productDimension,
+    productWeight: info.productWeight,
+    skuCounters: info.productSkuCounter,
+    customsDetails: info.customsDetails,
   };
 }
 
+// ── Route handler ─────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as RequestBody;
-  const skus = Array.from(new Set((body.skus || []).map((s) => (s ?? "").toString().trim()).filter(Boolean)));
+  const skus = Array.from(
+    new Set((body.skus || []).map((s) => (s ?? "").toString().trim()).filter(Boolean))
+  );
+
   if (!skus.length) {
     return NextResponse.json({ error: "No SKUs provided" }, { status: 400 });
   }
 
-  const rows = skus.map((sku) => {
-    const seed = hashSeed(sku);
-    const country = pick(COUNTRIES, seed, 1);
-    const altCountry = pick(COUNTRIES, seed, 3);
-    const language = pick(LANGUAGES, seed, 2);
-    const { startDate, endDate } = buildDateRange(seed);
-    const altDates = buildDateRange(seed + 11);
-    const priceBase = 10 + (seed % 90);
-    const childSku = `${sku}-A`;
-    const ingredientSeed = seed + 17;
-    const dimensionUnit = pick(DIMENSION_UNITS, seed, 4);
-    const weightUnit = pick(WEIGHT_UNITS, seed, 5);
+  const countryFilter = body.countryFilter ?? "all";
+  const softwareSystem = body.softwareSystem?.trim() || DEFAULT_SOFTWARE_SYSTEM;
 
-    return {
-      sku,
-      skuInfo: [{ sku }],
-      description: [
-        {
-          country,
-          language,
-          productName: `Sample SKU ${sku}`,
-          shortDescription: `Short description for SKU ${sku}.`,
-          longDescription: `Placeholder description for SKU ${sku}, generated for UI testing.`,
-        },
-        {
-          country: altCountry,
-          language: pick(LANGUAGES, seed, 4),
-          productName: `SKU ${sku} (${altCountry})`,
-          shortDescription: `Localized short description for ${altCountry}.`,
-          longDescription: `Extended placeholder copy for ${sku} in ${altCountry}.`,
-        },
-      ],
-      details: [
-        {
-          country,
-          kitType: pick(KIT_TYPES, seed, 2),
-          startDate,
-          endDate,
-          standardWeight: `${(seed % 12) + 1} ${weightUnit}`,
-          freightable: seed % 2 === 0,
-          shippable: seed % 3 !== 0,
-          commissionable: seed % 4 !== 0,
-          memberOnly: seed % 5 === 0,
-          coo: pick(SHIP_TO_COUNTRIES, seed, 7),
-          tariffCode: `T-${(seed % 9000) + 1000}`,
-        },
-      ],
-      ingredients: [
-        {
-          country,
-          culture: pick(CULTURES, seed, 2),
-          productName: `Sample SKU ${sku}`,
-          ingredientName: `Ingredient ${(ingredientSeed % 40) + 1}`,
-          shortDescription: `Ingredient notes for SKU ${sku}.`,
-          allSort: (ingredientSeed % 20) + 1,
-          keySort: (ingredientSeed % 10) + 1,
-          modalCtaText: "View ingredient details",
-          modalCtaLink: "https://example.com/ingredients",
-        },
-      ],
-      channelAvailability: [
-        {
-          country,
-          warehouse: pick(WAREHOUSES, seed, 1),
-          salesChannel: pick(SALES_CHANNELS, seed, 2),
-          startDate,
-          endDate,
-          available: seed % 2 === 0,
-        },
-        {
-          country: altCountry,
-          warehouse: pick(WAREHOUSES, seed, 4),
-          salesChannel: pick(SALES_CHANNELS, seed, 5),
-          startDate: altDates.startDate,
-          endDate: altDates.endDate,
-          available: seed % 3 !== 0,
-        },
-      ],
-      pricing: [
-        {
-          country,
-          priceType: pick(PRICE_TYPES, seed, 2),
-          price: Number((priceBase + 0.95).toFixed(2)),
-          startDate,
-          endDate,
-        },
-      ],
-      productPoints: [
-        {
-          country,
-          productPointsType: pick(POINTS_TYPES, seed, 1),
-          startDate,
-          endDate,
-        },
-      ],
-      kitDetails: [
-        {
-          country,
-          quantity: 1 + (seed % 4),
-          sortOrder: (seed % 5) + 1,
-          newSortOrder: (seed % 7) + 1,
-          parentSku: sku,
-          childSku,
-          childSkuDescription: `Accessory for SKU ${sku}`,
-          selectType: pick(SELECT_TYPES, seed, 2),
-          startDate,
-          endDate,
-        },
-      ],
-      businessRules: [
-        {
-          country,
-          businessRule: pick(BUSINESS_RULES, seed, 2),
-          startDate,
-          endDate,
-          itemUnitQty: (seed % 6) + 1,
-          maxQty: (seed % 12) + 1,
-          bundleMaxWeight: Number(((seed % 20) + 5 + 0.5).toFixed(1)),
-          productCategoryIden: pick(PRODUCT_CATEGORIES, seed, 2),
-          shipToCountry: pick(SHIP_TO_COUNTRIES, seed, 3),
-          shipToCountryIden: `CT-${(seed % 200) + 1}`,
-          ruleSku: sku,
-          notificationLocalizationKey: `rule.${sku}.notice`,
-          generalSupportingData: "Placeholder supporting data",
-        },
-      ],
-      productBayLocation: [
-        {
-          country,
-          warehouse: pick(WAREHOUSES, seed, 2),
-          bayLocation: pick(BAY_LOCATIONS, seed, 1),
-        },
-      ],
-      productDimension: [
-        {
-          country,
-          unit: dimensionUnit,
-          height: Number(((seed % 10) + 1 + 0.2).toFixed(2)),
-          width: Number(((seed % 12) + 1 + 0.3).toFixed(2)),
-          depth: Number(((seed % 8) + 1 + 0.4).toFixed(2)),
-        },
-      ],
-      productWeight: [
-        {
-          country,
-          weightAmount: Number(((seed % 15) + 1 + 0.6).toFixed(2)),
-          weightUnit,
-        },
-      ],
-      skuCounters: [
-        {
-          country,
-          warehouse: pick(WAREHOUSES, seed, 2),
-          onHand: 100 + (seed % 120),
-          pending: 5 + (seed % 20),
-          available: 90 + (seed % 90),
-        },
-      ],
-      customsDetails: [
-        {
-          country,
-          euTariffCode: `EU-${(seed % 9000) + 1000}`,
-          standardCostEur: Number((priceBase * 0.82).toFixed(2)),
-        },
-      ],
-    };
-  });
+  try {
+    let items: ApiSkuItem[];
 
-  return NextResponse.json(
-    {
-      rows,
-      meta: {
-        rowCount: rows.length,
-      },
-    },
-    { status: 200 }
-  );
+    if (countryFilter === "all") {
+      const [usItems, caItems] = await Promise.all([
+        fetchSkuData(skus, COUNTRY_MAP.us, softwareSystem),
+        fetchSkuData(skus, COUNTRY_MAP.ca, softwareSystem),
+      ]);
+
+      const merged = new Map<string, ApiSkuItem>();
+      for (const item of usItems) {
+        merged.set(item.sku, item);
+      }
+      for (const item of caItems) {
+        const existing = merged.get(item.sku);
+        if (!existing) {
+          merged.set(item.sku, item);
+        } else {
+          mergeInfoInto(existing.productInformation, item.productInformation);
+        }
+      }
+      items = Array.from(merged.values());
+    } else {
+      items = await fetchSkuData(skus, COUNTRY_MAP[countryFilter], softwareSystem);
+    }
+
+    const rows = items.map(transformItem);
+
+    return NextResponse.json({ rows, meta: { rowCount: rows.length } }, { status: 200 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined;
+    console.error("[dashboard] fetch failed:", message, cause ?? "");
+    return NextResponse.json({ error: cause ? `${message}: ${cause}` : message }, { status: 502 });
+  }
 }

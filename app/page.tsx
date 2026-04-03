@@ -19,7 +19,7 @@ type DetailsRow = {
   kitType: string;
   startDate: string;
   endDate: string;
-  standardWeight: string;
+  standardWeight: number;
   freightable: boolean;
   shippable: boolean;
   commissionable: boolean;
@@ -60,6 +60,7 @@ type PricingRow = {
 type ProductPointsRow = {
   country: string;
   productPointsType: string;
+  value: number;
   startDate: string;
   endDate: string;
 };
@@ -124,7 +125,7 @@ type SkuCounterRow = {
 type CustomsDetailsRow = {
   country: string;
   euTariffCode: string;
-  standardCostEur: number;
+  standardCostEur: number | null;
 };
 
 type SectionRowMap = {
@@ -426,6 +427,7 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     columns: [
       { header: "Country", render: (row) => row.country },
       { header: "Product Points Type", render: (row) => row.productPointsType },
+      { header: "Value", className: "text-right font-mono", render: (row) => row.value },
       { header: "Start Date", render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", render: (row) => formatDisplayDate(row.endDate) },
     ],
@@ -607,7 +609,7 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
         <div className="space-y-1 text-sm">
           <p className="font-semibold">{first.euTariffCode}</p>
           <p className="text-xs opacity-80">
-            {first.country} · {currencyFormatter.format(first.standardCostEur)}
+            {first.country} · {first.standardCostEur != null ? currencyFormatter.format(first.standardCostEur) : "--"}
             {rows.length > 1 ? ` (+${rows.length - 1} more)` : ""}
           </p>
         </div>
@@ -616,7 +618,7 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     columns: [
       { header: "Country", render: (row) => row.country },
       { header: "EU Tariff Code", render: (row) => row.euTariffCode },
-      { header: "07 Standard Cost [EUR]", className: "text-right font-mono", render: (row) => currencyFormatter.format(row.standardCostEur) },
+      { header: "07 Standard Cost [EUR]", className: "text-right font-mono", render: (row) => row.standardCostEur != null ? currencyFormatter.format(row.standardCostEur) : "--" },
     ],
   },
 };
@@ -630,6 +632,7 @@ export default function Page() {
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
   const [missingSkus, setMissingSkus] = useState<string[]>([]);
   const [countryFilter, setCountryFilter] = useState<"all" | "us" | "ca">("all");
+  const [softwareSystem, setSoftwareSystem] = useState("NorthAmerica");
   const [webOnly, setWebOnly] = useState(false);
   const [validationDate, setValidationDate] = useState<string>("");
 
@@ -702,12 +705,8 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           skus,
-          asOfDate: null,
-          channelId: null,
-          channelTypeId: null,
-          availableOnly: 0,
-          languageId: null,
           countryFilter,
+          softwareSystem,
           webOnly,
         }),
       });
@@ -909,6 +908,21 @@ export default function Page() {
                     <option value="us">US Only</option>
                     <option value="ca">CA Only</option>
                   </select>
+                </div>
+                <div className="flex flex-col">
+                  <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
+                    Software System
+                  </span>
+                  <input
+                    type="text"
+                    value={softwareSystem}
+                    onChange={(e) => setSoftwareSystem(e.target.value)}
+                    className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      isDark
+                        ? "border-slate-700 bg-slate-900 text-slate-100"
+                        : "border-slate-300 bg-white text-slate-900"
+                    }`}
+                  />
                 </div>
                 <div className="flex flex-col">
                   <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
