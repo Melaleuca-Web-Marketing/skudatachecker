@@ -11,6 +11,121 @@
   position: sticky;
 }
 
+.table-scroll-wrapper {
+  max-width: 100vw;
+  max-height: calc(100vh - 13rem);
+  overflow-x: auto;
+  overflow-y: auto;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-sizing: border-box;
+}
+
+.table-scroll-wrapper,
+.table-scroll-wrapper * {
+  box-sizing: border-box;
+}
+
+.table-scroll-wrapper table {
+  background-color: transparent;
+}
+
+.table-scroll-wrapper table tbody tr:hover td {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.table-scroll-wrapper table thead th,
+.table-scroll-wrapper table thead td {
+  background-color: transparent;
+  backdrop-filter: blur(6px);
+}
+
+.table-scroll-wrapper table thead tr.section-header-row th,
+.table-scroll-wrapper table thead tr.column-header-row th {
+  position: sticky;
+}
+
+.table-scroll-wrapper table thead tr.section-header-row th {
+  top: 0;
+  z-index: 120;
+}
+
+.table-scroll-wrapper table thead tr.column-header-row th {
+  top: 0;
+  z-index: 110;
+}
+
+.table-scroll-wrapper table th,
+.table-scroll-wrapper table td {
+  background-clip: padding-box;
+}
+
+.table-scroll-wrapper table tbody td,
+.table-scroll-wrapper table tbody th {
+  z-index: 1;
+}
+
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+}
+
+.column-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.column-resizer:hover::after,
+.column-resizer:focus-within::after {
+  opacity: 0.35;
+}
+
+[data-theme="light"] .table-scroll-wrapper table tbody tr:hover td {
+  background-color: rgba(15, 23, 42, 0.05);
+}
+
+.table-scroll-wrapper table tbody tr:hover {
+  transition: background-color 0.15s ease;
+  transform: none;
+  box-shadow: none;
+}
+
+.table-scroll-wrapper.sticky-fixed {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-width: 100%;
+  z-index: 40;
+  max-height: 45vh;
+  overflow-x: auto;
+  overflow-y: auto;
+  background: rgba(7, 11, 19, 0.92);
+  backdrop-filter: blur(4px);
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.35), 0 -8px 16px rgba(15, 23, 42, 0.2);
+  transform: translateY(0);
+}
+
+[data-theme="light"] .table-scroll-wrapper.sticky-fixed {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.35), 0 -8px 16px rgba(148, 163, 184, 0.15);
+}
+
+
 .section-header-cell::after {
   content: "";
   position: absolute;

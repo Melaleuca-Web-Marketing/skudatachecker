@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import leafLight from "../assets/leaf-light.png";
 import leafDark from "../assets/leaf-dark.png";
 import dropDark from "../assets/leaf-dark.png";
@@ -1029,7 +1029,173 @@ function CombinedSectionsTable({
 }: CombinedTableProps) {
   const isDark = theme === "dark";
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [tableStickyActive, setTableStickyActive] = useState(false);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [headerHeights, setHeaderHeights] = useState({ section: 44, column: 44 });
+  const [resizing, setResizing] = useState<{ colId: string; startX: number; startWidth: number } | null>(null);
+  const tableWrapperRef = useRef<HTMLDivElement | null>(null);
+  const sectionHeaderRowRef = useRef<HTMLTableRowElement | null>(null);
+  const columnHeaderRowRef = useRef<HTMLTableRowElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingResizeRef = useRef<{ colId: string; width: number } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onScroll = () => {
+      const tableEl = tableWrapperRef.current;
+      if (!tableEl) {
+        setTableStickyActive(false);
+        return;
+      }
+
+      const rect = tableEl.getBoundingClientRect();
+      const shouldStick = rect.top < 0 && rect.bottom > 100;
+      setTableStickyActive(shouldStick);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const updateHeaderHeights = () => {
+      const sectionHeight = sectionHeaderRowRef.current?.getBoundingClientRect().height ?? 44;
+      const columnHeight = columnHeaderRowRef.current?.getBoundingClientRect().height ?? 44;
+      setHeaderHeights({ section: sectionHeight, column: columnHeight });
+    };
+    updateHeaderHeights();
+    window.addEventListener("resize", updateHeaderHeights);
+    return () => window.removeEventListener("resize", updateHeaderHeights);
+  }, [sections]);
+
   const hasData = rows.length > 0;
+
+  useEffect(() => {
+    const baseWidths: Record<string, number> = {};
+    sections.forEach((section) => {
+      section.columns.forEach((_, columnIndex) => {
+        const colId = `${section.key}-${columnIndex}`;
+        if (!baseWidths[colId] && !columnWidths[colId]) {
+          baseWidths[colId] = DETAIL_COLUMN_WIDTH;
+        }
+      });
+    });
+    if (Object.keys(baseWidths).length > 0) {
+      setColumnWidths((prev) => ({ ...baseWidths, ...prev }));
+    }
+  }, [sections]);
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const flushResize = () => {
+      const pending = pendingResizeRef.current;
+      if (!pending) return;
+      applyColumnWidth(pending.colId, pending.width);
+      setColumnWidths((prev) => ({ ...prev, [pending.colId]: pending.width }));
+      pendingResizeRef.current = null;
+      rafRef.current = null;
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      event.preventDefault();
+      const nextId = resizing.colId;
+      const nextWidth = Math.max(70, resizing.startWidth + (event.clientX - resizing.startX));
+      pendingResizeRef.current = { colId: nextId, width: nextWidth };
+      applyColumnWidth(nextId, nextWidth);
+
+      if (rafRef.current === null) {
+        rafRef.current = window.requestAnimationFrame(flushResize);
+      }
+    };
+
+    const onMouseUp = () => {
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+        flushResize();
+      }
+      setResizing(null);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [resizing]);
+
+  const applyColumnWidth = (colId: string, width: number) => {
+    const table = tableWrapperRef.current?.querySelector("table");
+    if (!table) return;
+
+    table
+      .querySelectorAll<HTMLElement>(`[data-colid="${colId}"]`)
+      .forEach((cell) => {
+        cell.style.width = `${width}px`;
+        cell.style.minWidth = `${width}px`;
+        cell.style.maxWidth = `${width}px`;
+      });
+  };
+
+  const getTextFromReactNode = (node: ReactNode): string => {
+    if (node === null || node === undefined || typeof node === "boolean") return "";
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(getTextFromReactNode).join("");
+    if (typeof node === "object" && "props" in node && node?.props?.children) {
+      return getTextFromReactNode((node as any).props.children);
+    }
+    return "";
+  };
+
+  const autoFitColumn = (colId: string) => {
+    const sectionKey = colId.split("-")[0] as SectionKey;
+    const columnIndex = Number(colId.split("-")[1]);
+    const section = sections.find((s) => s.key === sectionKey);
+    if (!section || Number.isNaN(columnIndex)) return;
+
+    const column = section.columns[columnIndex];
+    if (!column) return;
+
+    const headerChars = column.header.trim().length;
+    let maxChars = headerChars;
+
+    rows.forEach((row) => {
+      const sectionData = (row as any)[sectionKey];
+      if (!Array.isArray(sectionData)) return;
+      sectionData.forEach((item: any) => {
+        const rendered = column.render(item as never);
+        const textValue = getTextFromReactNode(rendered).trim();
+        maxChars = Math.max(maxChars, textValue.length);
+      });
+    });
+
+    const avgCharWidth = 9.5; // slightly larger to avoid too-tight abbreviation display
+    const isDateColumn = /start date|end date|date/i.test(column.header);
+    const minColumnWidth = isDateColumn ? 120 : 70;
+    const targetWidth = Math.min(Math.max(minColumnWidth, maxChars * avgCharWidth + 20), 500);
+
+    console.info(`[autoFitColumn] ${colId}: maxChars=${maxChars}, isDate=${isDateColumn}, targetWidth=${targetWidth}`);
+    setColumnWidths((prev) => ({ ...prev, [colId]: targetWidth }));
+    applyColumnWidth(colId, targetWidth);
+  };
+
+  const startColumnResize = (colId: string) => (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setResizing({
+      colId,
+      startX: event.clientX,
+      startWidth: columnWidths[colId] ?? DETAIL_COLUMN_WIDTH,
+    });
+  };
 
   function handleExportCsv() {
     if (!hasData) return;
@@ -1109,12 +1275,17 @@ function CombinedSectionsTable({
       </div>
 
       <div className={`rounded-2xl border px-4 py-3 ${isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white"}`}>
-        <button
-          type="button"
-          onClick={() => setControlsOpen((prev) => !prev)}
-          className={`flex w-full items-center justify-between text-sm font-semibold ${
-            isDark ? "text-slate-100" : "text-slate-900"
-          }`}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className={`text-sm ${isDark ? "text-slate-300" : "text-slate-500"}`}>Drag the right edge of any column header to resize it Excel-style.</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setControlsOpen((prev) => !prev)}
+            className={`flex w-full items-center justify-between text-sm font-semibold ${
+              isDark ? "text-slate-100" : "text-slate-900"
+            }`}
           aria-expanded={controlsOpen}
         >
           <span>Section chips</span>
@@ -1138,11 +1309,15 @@ function CombinedSectionsTable({
           </div>
         )}
       </div>
+    </div>
 
-      <div className={`overflow-x-auto rounded-2xl border ${isDark ? "border-slate-800 bg-white/5" : "border-slate-200 bg-white"}`}>
+      <div
+        ref={tableWrapperRef}
+        className={`table-scroll-wrapper rounded-2xl border ${tableStickyActive ? "sticky-fixed" : ""} ${isDark ? "border-slate-800 bg-white/5" : "border-slate-200 bg-transparent"}`}
+      >
         <table className={`min-w-full table-auto border-separate border-spacing-0 text-left text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>
           <thead>
-            <tr className={`text-xs font-semibold uppercase ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+            <tr ref={sectionHeaderRowRef} className={`section-header-row text-xs font-semibold uppercase ${isDark ? "text-slate-300" : "text-slate-500"}`}>
               {sections.map((section, sectionIndex) => {
                 const isSticky = section.key === "skuInfo";
                 const expanded = isSticky ? false : expandedSections[section.key];
@@ -1157,8 +1332,8 @@ function CombinedSectionsTable({
                     className={`section-header-cell px-3 py-3 text-left ${
                       isSticky
                         ? isDark
-                          ? "sticky left-0 z-30 border-slate-700 bg-slate-800 text-slate-200 shadow shadow-indigo-900/30"
-                          : "sticky left-0 z-30 border-slate-200 bg-slate-50 text-slate-700 shadow shadow-indigo-100"
+                          ? "border-slate-700 bg-slate-800 text-slate-200"
+                          : "border-slate-200 bg-slate-50 text-slate-700"
                         : isDark
                           ? "border-slate-700 bg-slate-900 text-slate-200"
                           : "border-slate-200 bg-slate-50 text-slate-700"
@@ -1166,7 +1341,11 @@ function CombinedSectionsTable({
                     style={{
                       borderBottom: "0",
                       borderRight: isLast ? undefined : `1px solid ${separator}`,
-                      ...(isSticky ? { left: 0 } : {}),
+                      position: "sticky",
+                      top: 0,
+                      zIndex: 120,
+                      backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                      ...(isSticky ? { left: 0, zIndex: 130 } : {}),
                       ["--section-accent" as string]: accent,
                     }}
                   >
@@ -1193,7 +1372,7 @@ function CombinedSectionsTable({
                 );
               })}
             </tr>
-            <tr className={`text-xs font-semibold ${isDark ? "text-slate-200" : "text-slate-600"}`}>
+            <tr ref={columnHeaderRowRef} className={`column-header-row text-xs font-semibold ${isDark ? "text-slate-200" : "text-slate-600"}`}>
               {sections.map((section, sectionIndex) => {
                 const isSticky = section.key === "skuInfo";
                 const expanded = isSticky ? false : expandedSections[section.key];
@@ -1205,14 +1384,18 @@ function CombinedSectionsTable({
                     <th
                       className="px-3 py-1.5"
                       style={{
-                        ...summaryCellStyle(expanded, accent, isSticky, isDark),
+                        ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined),
+                        position: "sticky",
+                        top: headerHeights.section,
+                        zIndex: isSticky ? 210 : 55,
+                        backgroundColor: expanded ? accent : (isDark ? "#0b1221" : "#f8fafc"),
                         borderRight: isLast ? undefined : `1px solid ${separator}`,
                       }}
                     >
                       {isSticky ? (
                         <span
-                          className={`inline-flex w-full justify-between text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-all duration-500 ${
-                            expanded ? "translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+                          className={`inline-flex w-full justify-between text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                            expanded ? "opacity-0" : "opacity-100"
                           }`}
                         >
                           Summary
@@ -1221,8 +1404,8 @@ function CombinedSectionsTable({
                         <button
                           type="button"
                           onClick={() => onToggleSection(section.key)}
-                          className={`inline-flex w-full items-center justify-start gap-2 text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-all duration-500 ${
-                            expanded ? "translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+                          className={`inline-flex w-full items-center justify-start gap-2 text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                            expanded ? "opacity-0" : "opacity-100"
                           }`}
                         >
                           <span>Summary</span>
@@ -1232,21 +1415,42 @@ function CombinedSectionsTable({
                     </th>
                     {section.columns.map((column, columnIndex) => {
                       const stickyLeft = isSticky && columnIndex === 0 ? SUMMARY_COLUMN_WIDTH : undefined;
+                      const colId = `${section.key}-${columnIndex}`;
+                      const colWidth = columnWidths[colId] ?? DETAIL_COLUMN_WIDTH;
+                      const headerBackground = isSticky
+                        ? accent
+                        : accent;
                       return (
                         <th
                           key={`header-${section.key}-${column.header}`}
-                          className={`px-3 py-1.5 ${column.className ?? ""}`}
+                          className={`px-3 py-1.5 ${column.className ?? ""} relative`}
+                          data-colid={colId}
                           style={{
                             ...detailCellStyle(expanded, accent, columnIndex === 0, stickyLeft, isDark),
+                            backgroundColor: headerBackground,
+                            color: isDark ? "#f8fafc" : "#0f172a",
+                            position: "sticky",
+                            top: headerHeights.section,
+                            zIndex: columnIndex === 0 ? 175 : 104,
+                            width: expanded ? colWidth : 0,
+                            minWidth: expanded ? colWidth : 0,
                             borderRight:
                               expanded && !(isLast && columnIndex === section.columns.length - 1)
                                 ? `1px solid ${separator}`
                                 : undefined,
                           }}
                         >
+                          <div
+                            className="column-resizer"
+                            role="separator"
+                            aria-orientation="horizontal"
+                            onMouseDown={startColumnResize(colId)}
+                            onDoubleClick={() => autoFitColumn(colId)}
+                          />
                           <span
-                            className={`inline-flex w-full justify-between text-left font-semibold ${isDark ? "text-slate-50" : "text-slate-900"} transition-all duration-500 ${
-                              expanded ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
+                            onDoubleClick={() => autoFitColumn(colId)}
+                            className={`inline-flex w-full justify-between text-left font-semibold ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                              expanded ? "opacity-100" : "opacity-0"
                             }`}
                           >
                             {column.header}
@@ -1284,7 +1488,7 @@ function CombinedSectionsTable({
                         key={`cell-${rowIndex}-${section.key}-summary`}
                         className={`px-3 py-2 align-top ${isSticky ? "" : "cursor-pointer select-none"} ${isDark ? "text-slate-100" : "text-slate-900"}`}
                         style={{
-                          ...summaryCellStyle(expanded, accent, isSticky, isDark),
+                          ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined, headerHeights.section + headerHeights.column),
                           borderRight: isLast ? undefined : `1px solid ${separator}`,
                         }}
                         onClick={() => (isSticky ? undefined : onToggleSection(section.key))}
@@ -1292,8 +1496,8 @@ function CombinedSectionsTable({
                         aria-pressed={expanded}
                       >
                         <div
-                          className={`transition-all duration-500 ${
-                            expanded ? "translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+                          className={`transition-opacity duration-200 ${
+                            expanded ? "opacity-0" : "opacity-100"
                           }`}
                           aria-hidden={expanded}
                         >
@@ -1310,13 +1514,16 @@ function CombinedSectionsTable({
                             className={`px-3 ${expanded ? "py-2" : "py-0"} align-top ${column.className ?? ""} ${isDark ? "text-slate-100" : "text-slate-900"}`}
                             style={{
                               ...detailCellStyle(expanded, accent, columnIndex === 0, stickyLeft, isDark),
+                              width: expanded ? (columnWidths[`${section.key}-${columnIndex}`] ?? DETAIL_COLUMN_WIDTH) : 0,
+                              minWidth: expanded ? (columnWidths[`${section.key}-${columnIndex}`] ?? DETAIL_COLUMN_WIDTH) : 0,
                               borderRight: expanded && !isLastColumn ? `1px solid ${separator}` : "none",
                               borderLeft: "none",
                             }}
+                            data-colid={`${section.key}-${columnIndex}`}
                           >
                             <div
-                              className={`space-y-1 transition-all duration-500 ${
-                                expanded ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
+                              className={`space-y-1 transition-opacity duration-200 ${
+                                expanded ? "opacity-100" : "opacity-0"
                               }`}
                               aria-hidden={!expanded}
                               style={{
@@ -1327,11 +1534,27 @@ function CombinedSectionsTable({
                               {arr.length === 0 ? (
                                 <span className="text-slate-400">--</span>
                               ) : (
-                                arr.map((item, idx) => (
-                                  <div key={`${section.key}-${rowIndex}-${idx}`} className="space-y-0.5">
-                                    {column.render(item as never)}
-                                  </div>
-                                ))
+                                arr.map((item, idx) => {
+                                  const isEvenRow = idx % 2 === 0;
+                                  const itemBg = isDark ? (isEvenRow ? `${accent}25` : `${accent}15`) : (isEvenRow ? `${accent}20` : `${accent}10`);
+                                  const itemBorder = `1px solid ${isEvenRow ? `${accent}40` : `${accent}22`}`;
+                                  return (
+                                    <div
+                                      key={`${section.key}-${rowIndex}-${idx}`}
+                                      className="space-y-0.5 px-2 py-1"
+                                      style={{
+                                        backgroundColor: itemBg,
+                                        borderBottom: itemBorder,
+                                        borderRadius: 0,
+                                        margin: 0,
+                                      }}
+                                    >
+                                      <div className="whitespace-normal break-words" style={{ padding: "2px 4px" }}>
+                                        {column.render(item as never)}
+                                      </div>
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
                           </td>
@@ -1461,26 +1684,26 @@ function SectionVisibilityToggles({
         </div>
       </div>
       <div className={`flex flex-wrap gap-2 ${disabledStyles}`}>
-        {sections.map((section) => {
-          const enabled = section.key === "skuInfo" ? true : visibility[section.key];
-          const disabled = section.key === "skuInfo";
-          return (
-            <button
-              key={`visibility-${section.key}`}
-              type="button"
-              aria-pressed={enabled}
-              onClick={() => (disabled ? undefined : onToggle(section.key))}
-              disabled={disabled}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                enabled
-                  ? isDark
-                    ? "border-indigo-400/60 bg-indigo-500/15 text-indigo-100 shadow-sm shadow-indigo-900/40"
-                    : "border-indigo-200 bg-indigo-50 text-indigo-900 shadow-sm shadow-indigo-200/70"
-                  : isDark
-                    ? "border-slate-700 bg-slate-800 text-slate-200 hover:border-indigo-400 hover:text-indigo-200"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-              } ${disabled ? "cursor-not-allowed opacity-80" : ""}`}
-            >
+        {sections
+          .filter((section) => section.key !== "skuInfo")
+          .map((section) => {
+            const enabled = visibility[section.key];
+            return (
+              <button
+                key={`visibility-${section.key}`}
+                type="button"
+                aria-pressed={enabled}
+                onClick={() => onToggle(section.key)}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  enabled
+                    ? isDark
+                      ? "border-indigo-400/60 bg-indigo-500/15 text-indigo-100 shadow-sm shadow-indigo-900/40"
+                      : "border-indigo-200 bg-indigo-50 text-indigo-900 shadow-sm shadow-indigo-200/70"
+                    : isDark
+                      ? "border-slate-700 bg-slate-800 text-slate-200 hover:border-indigo-400 hover:text-indigo-200"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+                }`}
+              >
               <span className="inline-flex items-center gap-1.5">
                 <span
                   className={`flex items-center rounded-full border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-widest ${
@@ -1527,8 +1750,8 @@ function PlusMinusIcon({ expanded, isDark }: { expanded: boolean; isDark: boolea
   );
 }
 
-function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isDark = false) {
-  const width = expanded ? 0 : SUMMARY_COLUMN_WIDTH;
+function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isDark = false, stickyLeft?: number, stickyTop?: number) {
+  const width = SUMMARY_COLUMN_WIDTH;
   const tint = `${accent}22`;
   const collapsedTint = `${accent}12`;
   const solidBg = isDark ? "#0f172a" : "#f8fafc";
@@ -1538,17 +1761,19 @@ function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isD
     width,
     maxWidth: width,
     minWidth: width,
-    paddingInline: expanded ? 0 : undefined,
+    paddingInline: 0,
     overflow: "hidden",
     backgroundColor: sticky ? solidBg : expanded ? tint : collapsedTint,
     boxShadow: expanded ? `inset -2px 0 0 ${accent}33` : "none",
     color: isDark ? "#e5e7eb" : "#0f172a",
-    transition: "all 0.5s ease",
+    transition: "background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
     ...(sticky
       ? {
           position: "sticky" as const,
-          left: 0,
-          zIndex: 25,
+          top: typeof stickyTop === "number" ? stickyTop : 88,
+          ...(typeof stickyLeft === "number" ? { left: stickyLeft } : {}),
+          zIndex: 180,
+          backgroundColor: isDark ? "#0f172a" : "#f8fafc",
           boxShadow: stickyShadow,
         }
       : {}),
@@ -1576,7 +1801,7 @@ function detailCellStyle(
     backgroundColor: typeof stickyLeft === "number" ? solidBg : expanded ? tint : collapsedTint,
     boxShadow: expanded ? `inset -1px 0 0 ${accent}30` : "none",
     color: isDark ? "#e5e7eb" : "#0f172a",
-    transition: "all 0.5s ease",
+    transition: "background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
     ...(typeof stickyLeft === "number"
       ? {
           position: "sticky" as const,
