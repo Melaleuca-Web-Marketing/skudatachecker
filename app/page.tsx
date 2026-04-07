@@ -661,6 +661,7 @@ export default function Page() {
   const [country, setCountry] = useState("");
   const [webOnly, setWebOnly] = useState(false);
   const [validationDate, setValidationDate] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const buildCollapsedState = () =>
     SECTION_ORDER.reduce(
@@ -695,6 +696,15 @@ export default function Page() {
   const visibleSections = sectionList.filter((section) =>
     section.key === "skuInfo" ? true : sectionVisibility[section.key]
   );
+  const displayRows = useMemo(() => {
+    if (!webOnly || !rows) return rows;
+    return rows.map((row) => ({
+      ...row,
+      channelAvailability: row.channelAvailability.filter(
+        (r) => r.salesChannel === "Web"
+      ),
+    }));
+  }, [rows, webOnly]);
   const hasRows = !!rows?.length;
 
   useEffect(() => {
@@ -888,13 +898,11 @@ export default function Page() {
             isDark ? "border-white/10 bg-white/5 shadow-slate-900/40" : "border-slate-200 bg-white shadow-slate-900/10"
           }`}
         >
-          <div className="flex flex-col gap-3">
+          {/* ── SKU Input ── */}
+          <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <label
-                htmlFor="skuInput"
-                className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}
-              >
-                SKU list
+              <label htmlFor="skuInput" className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
+                SKU List
               </label>
               <span
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold ${
@@ -908,62 +916,122 @@ export default function Page() {
               >
                 ?
               </span>
+              {skus.length > 0 && (
+                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {skus.length} SKU{skus.length === 1 ? "" : "s"} detected
+                </span>
+              )}
             </div>
             <textarea
               id="skuInput"
-              className={`min-h-[180px] flex-1 rounded-2xl border p-4 font-mono text-sm outline-none transition focus:ring-2 focus:ring-indigo-500/40 ${
+              className={`min-h-[140px] flex-1 rounded-2xl border p-4 font-mono text-sm outline-none transition focus:ring-2 focus:ring-indigo-500/40 ${
                 isDark
                   ? "border-white/10 bg-slate-950/60 text-white focus:border-indigo-400"
                   : "border-slate-300 bg-white text-slate-900 focus:border-indigo-500"
               }`}
-              placeholder="One SKU per line or comma separated"
+              placeholder="One SKU per line, or comma/space separated"
               value={skuInput}
               onChange={(event) => setSkuInput(event.target.value)}
             />
-            <div className="flex flex-col gap-3 text-sm">
-              <div className="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 shadow-sm shadow-slate-900/5">
-                <div className="flex flex-col">
-                  <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
-                    Software System
+          </div>
+
+          {/* ── API Config ── */}
+          <div className={`rounded-2xl border p-4 ${isDark ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50"}`}>
+        
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+              {/* Software System */}
+              <div className="flex flex-col gap-1">
+                <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                  Software System
+                </label>
+                <select
+                  value={softwareSystem}
+                  onChange={(e) => { setSoftwareSystem(e.target.value); setCountry(""); }}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                    isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
+                  }`}
+                >
+                  {SOFTWARE_SYSTEMS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Country */}
+              <div className="flex flex-col gap-1">
+                <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                  Country
+                  <span className={`ml-1.5 font-normal normal-case tracking-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>(optional)</span>
+                </label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                    isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
+                  }`}
+                >
+                  <option value="">All countries</option>
+                  {countryOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+            </div>
+          </div>
+
+          {/* ── Filters (accordion) ── */}
+          <div className={`rounded-2xl border ${isDark ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50"}`}>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              aria-expanded={filtersOpen}
+              className={`flex w-full items-center justify-between px-4 py-3 text-left ${isDark ? "text-slate-200 hover:text-white" : "text-slate-700 hover:text-slate-900"}`}
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-widest">Filters</span>
+                {(webOnly || validationDate) && (
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${isDark ? "bg-emerald-500/20 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}>
+                    Active
                   </span>
-                  <select
-                    value={softwareSystem}
-                    onChange={(e) => { setSoftwareSystem(e.target.value); setCountry(""); }}
-                    className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                      isDark
-                        ? "border-slate-700 bg-slate-900 text-slate-100"
-                        : "border-slate-300 bg-white text-slate-900"
+                )}
+              </span>
+              <svg
+                className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${filtersOpen ? "rotate-180" : "rotate-0"}`}
+                viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+              >
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            {filtersOpen && (
+              <div className="grid grid-cols-1 gap-4 border-t px-4 pb-4 pt-3 sm:grid-cols-2" style={{ borderColor: isDark ? "rgb(51 65 85)" : "rgb(226 232 240)" }}>
+
+                {/* Validation Date */}
+                <div className="flex flex-col gap-1">
+                  <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                    Validation Date
+                    <span className={`ml-1.5 font-normal normal-case tracking-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={validationDate}
+                    onChange={(e) => setValidationDate(e.target.value)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
                     }`}
-                  >
-                    {SOFTWARE_SYSTEMS.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
-                <div className="flex flex-col">
-                  <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
-                    Country
+
+                {/* Web Channels Only */}
+                <div className="flex flex-col gap-1">
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                    Channel Filter
                   </span>
-                  <select
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                      isDark
-                        ? "border-slate-700 bg-slate-900 text-slate-100"
-                        : "border-slate-300 bg-white text-slate-900"
-                    }`}
-                  >
-                    <option value="">All</option>
-                    {countryOptions.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
-                    Channel
-                  </span>
-                  <label className="mt-1 inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-medium transition hover:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400">
+                  <label className={`inline-flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition hover:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400 ${
+                    isDark ? "border-slate-600 bg-slate-800" : "border-slate-300 bg-white"
+                  }`}>
                     <input
                       type="checkbox"
                       checked={webOnly}
@@ -973,36 +1041,24 @@ export default function Page() {
                     <span className={isDark ? "text-slate-100" : "text-slate-800"}>Web channels only</span>
                   </label>
                 </div>
-                <div className="flex flex-col">
-                  <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
-                    Validation date
-                  </span>
-                  <input
-                    type="date"
-                    value={validationDate}
-                    onChange={(e) => setValidationDate(e.target.value)}
-                    className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                      isDark
-                        ? "border-slate-700 bg-slate-900 text-slate-100"
-                        : "border-slate-300 bg-white text-slate-900"
-                    }`}
-                  />
-                </div>
+
               </div>
-            </div>
+            )}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* ── Submit ── */}
+          <div className="flex items-center justify-between gap-4">
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex w-full justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 px-8 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Searching…" : "Search"}
             </button>
+            {!lastGenerated && (
+              <p className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>Enter SKUs above and press Search.</p>
+            )}
           </div>
-
-          {!lastGenerated && <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>No dashboard data yet.</p>}
         </form>
 
         {error && (
@@ -1041,7 +1097,7 @@ export default function Page() {
 
         <CombinedSectionsTable
           sections={visibleSections}
-          rows={rows ?? []}
+          rows={displayRows ?? []}
           expandedSections={expandedSections}
           onToggleSection={toggleSection}
           onExpandAll={expandAll}
@@ -1184,7 +1240,7 @@ function CombinedSectionsTable({
     if (node === null || node === undefined || typeof node === "boolean") return "";
     if (typeof node === "string" || typeof node === "number") return String(node);
     if (Array.isArray(node)) return node.map(getTextFromReactNode).join("");
-    if (typeof node === "object" && "props" in node && node?.props?.children) {
+    if (typeof node === "object" && "props" in node && (node as any)?.props?.children) {
       return getTextFromReactNode((node as any).props.children);
     }
     return "";
