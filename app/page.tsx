@@ -156,6 +156,7 @@ type Theme = "light" | "dark";
 type ColumnDescriptor<K extends SectionKey> = {
   header: string;
   className?: string;
+  initialWidth?: number;
   render: (row: SectionRowMap[K][number]) => ReactNode;
 };
 
@@ -399,7 +400,7 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     },
     columns: [
       { header: "Country", render: (row) => row.country },
-      { header: "Warehouse", render: (row) => row.warehouse },
+      { header: "Warehouse", initialWidth: 220, className: "truncate", render: (row) => <span title={row.warehouse} className="block truncate">{row.warehouse}</span> },
       { header: "Sales Channel", render: (row) => row.salesChannel },
       { header: "Start Date", render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", render: (row) => formatDisplayDate(row.endDate) },
@@ -682,6 +683,43 @@ export default function Page() {
       {} as Record<SectionKey, boolean>
     )
   );
+
+  // ── Restore persisted preferences on mount ──────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("sku-prefs");
+      if (!raw) return;
+      const prefs = JSON.parse(raw);
+      if (typeof prefs.skuInput === "string") setSkuInput(prefs.skuInput);
+      if (typeof prefs.softwareSystem === "string") setSoftwareSystem(prefs.softwareSystem);
+      if (typeof prefs.country === "string") setCountry(prefs.country);
+      if (typeof prefs.webOnly === "boolean") setWebOnly(prefs.webOnly);
+      if (typeof prefs.validationDate === "string") setValidationDate(prefs.validationDate);
+      if (prefs.sectionVisibility && typeof prefs.sectionVisibility === "object") {
+        setSectionVisibility((prev) => ({ ...prev, ...prefs.sectionVisibility }));
+      }
+    } catch {
+      // corrupted storage — ignore
+    }
+  }, []);
+
+  // ── Persist preferences whenever they change ────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("sku-prefs", JSON.stringify({
+        skuInput,
+        softwareSystem,
+        country,
+        webOnly,
+        validationDate,
+        sectionVisibility,
+      }));
+    } catch {
+      // storage full or unavailable — ignore
+    }
+  }, [skuInput, softwareSystem, country, webOnly, validationDate, sectionVisibility]);
 
   const countryOptions = useMemo(
     () => SYSTEM_COUNTRIES[softwareSystem as SoftwareSystem] ?? [],
@@ -1166,10 +1204,10 @@ function CombinedSectionsTable({
   useEffect(() => {
     const baseWidths: Record<string, number> = {};
     sections.forEach((section) => {
-      section.columns.forEach((_, columnIndex) => {
+      section.columns.forEach((column, columnIndex) => {
         const colId = `${section.key}-${columnIndex}`;
         if (!baseWidths[colId] && !columnWidths[colId]) {
-          baseWidths[colId] = DETAIL_COLUMN_WIDTH;
+          baseWidths[colId] = column.initialWidth ?? DETAIL_COLUMN_WIDTH;
         }
       });
     });
@@ -1562,10 +1600,15 @@ function CombinedSectionsTable({
                 </td>
               </tr>
             ) : (
-              rows.map((row, rowIndex) => (
+              rows.map((row, rowIndex) => {
+                const isEvenSkuRow = rowIndex % 2 === 0;
+                const rowTint = isDark
+                  ? isEvenSkuRow ? "rgba(255,255,255,0.0)" : "rgba(255,255,255,0.04)"
+                  : isEvenSkuRow ? "rgba(0,0,0,0.0)" : "rgba(0,0,0,0.04)";
+                return (
                 <tr
                   key={`row-${row.sku}-${rowIndex}`}
-                  className={`${rowIndex === 0 ? "border-t-0" : "border-t"} ${isDark ? "border-slate-800 text-slate-100 hover:bg-slate-800" : "border-slate-200 text-slate-900 hover:bg-slate-50"}`}
+                  className={isDark ? "text-slate-100 hover:bg-slate-800" : "text-slate-900 hover:bg-slate-50"}
                 >
                   {sections.flatMap((section, sectionIndex) => {
                     const isSticky = section.key === "skuInfo";
@@ -1580,6 +1623,10 @@ function CombinedSectionsTable({
                         className={`px-3 py-2 align-top ${isSticky ? "" : "cursor-pointer select-none"} ${isDark ? "text-slate-100" : "text-slate-900"}`}
                         style={{
                           ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined, headerHeights.section + headerHeights.column),
+                          backgroundColor: isSticky
+                            ? (isDark ? "#0f172a" : "#f8fafc")
+                            : `color-mix(in srgb, ${expanded ? `${accent}22` : `${accent}12`} 100%, ${rowTint})`,
+                          borderTop: rowIndex === 0 ? "none" : isDark ? "1px solid rgb(71 85 105 / 0.6)" : "1px solid rgb(148 163 184 / 0.5)",
                           borderRight: isLast ? undefined : `1px solid ${separator}`,
                         }}
                         onClick={() => (isSticky ? undefined : onToggleSection(section.key))}
@@ -1605,6 +1652,8 @@ function CombinedSectionsTable({
                             className={`px-4 ${expanded ? "py-3" : "py-0"} align-top ${column.className ?? ""} ${isDark ? "text-slate-100" : "text-slate-900"}`}
                             style={{
                               ...detailCellStyle(expanded, accent, columnIndex === 0, stickyLeft, isDark),
+                              backgroundColor: `color-mix(in srgb, ${expanded ? `${accent}18` : `${accent}10`} 100%, ${rowTint})`,
+                              borderTop: rowIndex === 0 ? "none" : isDark ? "1px solid rgb(71 85 105 / 0.6)" : "1px solid rgb(148 163 184 / 0.5)",
                               width: expanded ? (columnWidths[`${section.key}-${columnIndex}`] ?? DETAIL_COLUMN_WIDTH) : 0,
                               minWidth: expanded ? (columnWidths[`${section.key}-${columnIndex}`] ?? DETAIL_COLUMN_WIDTH) : 0,
                               borderRight: expanded && !isLastColumn ? `1px solid ${separator}` : "none",
@@ -1654,7 +1703,8 @@ function CombinedSectionsTable({
                     ];
                   })}
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
