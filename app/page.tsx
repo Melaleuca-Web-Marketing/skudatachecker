@@ -190,6 +190,32 @@ type SectionVisibilityControlsProps = {
   disabled?: boolean;
 };
 
+const SOFTWARE_SYSTEMS = [
+  "NorthAmerica",
+  "Taiwan",
+  "Japan",
+  "Australia",
+  "Korea",
+  "Europe",
+  "Singapore",
+  "China",
+  "Philippines",
+] as const;
+
+type SoftwareSystem = (typeof SOFTWARE_SYSTEMS)[number];
+
+const SYSTEM_COUNTRIES: Record<SoftwareSystem, string[]> = {
+  NorthAmerica: ["UnitedStates", "Canada", "Mexico", "MelaVanilla"],
+  Taiwan: ["Taiwan"],
+  Japan: ["Japan"],
+  Australia: ["Australia", "NewZealand"],
+  Korea: ["Korea", "HongKong"],
+  Europe: ["UnitedKingdom", "Ireland", "Netherlands", "Germany", "Austria", "Hungary", "Poland", "Spain", "Lithuania", "Latvia", "Estonia"],
+  Singapore: ["Singapore", "Malaysia"],
+  China: ["China"],
+  Philippines: ["Philippines"],
+};
+
 const SECTION_ORDER: SectionKey[] = [
   "skuInfo",
   "description",
@@ -631,8 +657,8 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
   const [missingSkus, setMissingSkus] = useState<string[]>([]);
-  const [countryFilter, setCountryFilter] = useState<"all" | "us" | "ca">("all");
   const [softwareSystem, setSoftwareSystem] = useState("NorthAmerica");
+  const [country, setCountry] = useState("");
   const [webOnly, setWebOnly] = useState(false);
   const [validationDate, setValidationDate] = useState<string>("");
 
@@ -654,6 +680,11 @@ export default function Page() {
       },
       {} as Record<SectionKey, boolean>
     )
+  );
+
+  const countryOptions = useMemo(
+    () => SYSTEM_COUNTRIES[softwareSystem as SoftwareSystem] ?? [],
+    [softwareSystem]
   );
 
   const skus = useMemo(() => parseSkus(skuInput), [skuInput]);
@@ -705,7 +736,7 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           skus,
-          countryFilter,
+          country,
           softwareSystem,
           webOnly,
         }),
@@ -893,36 +924,40 @@ export default function Page() {
               <div className="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 shadow-sm shadow-slate-900/5">
                 <div className="flex flex-col">
                   <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
-                    Country
+                    Software System
                   </span>
                   <select
-                    value={countryFilter}
-                    onChange={(e) => setCountryFilter(e.target.value as "all" | "us" | "ca")}
+                    value={softwareSystem}
+                    onChange={(e) => { setSoftwareSystem(e.target.value); setCountry(""); }}
                     className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                       isDark
                         ? "border-slate-700 bg-slate-900 text-slate-100"
                         : "border-slate-300 bg-white text-slate-900"
                     }`}
                   >
-                    <option value="all">All</option>
-                    <option value="us">US Only</option>
-                    <option value="ca">CA Only</option>
+                    {SOFTWARE_SYSTEMS.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex flex-col">
                   <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>
-                    Software System
+                    Country
                   </span>
-                  <input
-                    type="text"
-                    value={softwareSystem}
-                    onChange={(e) => setSoftwareSystem(e.target.value)}
+                  <select
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
                     className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                       isDark
                         ? "border-slate-700 bg-slate-900 text-slate-100"
                         : "border-slate-300 bg-white text-slate-900"
                     }`}
-                  />
+                  >
+                    <option value="">All</option>
+                    {countryOptions.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex flex-col">
                   <span className={isDark ? "text-slate-300 text-[11px] uppercase tracking-wide" : "text-slate-500 text-[11px] uppercase tracking-wide"}>

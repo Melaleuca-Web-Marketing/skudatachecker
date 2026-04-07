@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 type RequestBody = {
   skus?: string[];
-  countryFilter?: "all" | "us" | "ca";
+  country?: string;
   softwareSystem?: string;
 };
 
@@ -159,11 +159,6 @@ const BASE_URL = (process.env.PRODUCT_API_BASE_URL ?? "").replace(/\/$/, "");
 const DEFAULT_SOFTWARE_SYSTEM = process.env.PRODUCT_API_SOFTWARE_SYSTEM ?? "NorthAmerica";
 const USER_ID = process.env.PRODUCT_API_USER_ID ?? "";
 
-const COUNTRY_MAP: Record<"us" | "ca", string> = {
-  us: "UnitedStates",
-  ca: "Canada",
-};
-
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
 async function fetchSkuData(skus: string[], country: string, softwareSystem: string): Promise<ApiSkuItem[]> {
@@ -171,7 +166,9 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
   for (const sku of skus) {
     params.append("skus", sku);
   }
-  params.set("country", country);
+  if (country) {
+    params.set("country", country);
+  }
 
   const url = `${BASE_URL}/v1/Products/GlobalProductInformation?${params.toString()}`;
   const res = await fetch(url, {
@@ -189,22 +186,6 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
   }
 
   return res.json() as Promise<ApiSkuItem[]>;
-}
-
-function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
-  target.descriptions.push(...source.descriptions);
-  target.details.push(...source.details);
-  target.ingredients.push(...source.ingredients);
-  target.channelAvailability.push(...source.channelAvailability);
-  target.pricing.push(...source.pricing);
-  target.productPoints.push(...source.productPoints);
-  target.kitDetails.push(...source.kitDetails);
-  target.productBusinessRules.push(...source.productBusinessRules);
-  target.productBayLocation.push(...source.productBayLocation);
-  target.productDimension.push(...source.productDimension);
-  target.productWeight.push(...source.productWeight);
-  target.productSkuCounter.push(...source.productSkuCounter);
-  target.customsDetails.push(...source.customsDetails);
 }
 
 // ── Transform API shape → frontend DashboardRow shape ────────────────────────
@@ -254,34 +235,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No SKUs provided" }, { status: 400 });
   }
 
-  const countryFilter = body.countryFilter ?? "all";
+  const country = body.country?.trim() || "";
   const softwareSystem = body.softwareSystem?.trim() || DEFAULT_SOFTWARE_SYSTEM;
 
   try {
     let items: ApiSkuItem[];
-
-    if (countryFilter === "all") {
-      const [usItems, caItems] = await Promise.all([
-        fetchSkuData(skus, COUNTRY_MAP.us, softwareSystem),
-        fetchSkuData(skus, COUNTRY_MAP.ca, softwareSystem),
-      ]);
-
-      const merged = new Map<string, ApiSkuItem>();
-      for (const item of usItems) {
-        merged.set(item.sku, item);
-      }
-      for (const item of caItems) {
-        const existing = merged.get(item.sku);
-        if (!existing) {
-          merged.set(item.sku, item);
-        } else {
-          mergeInfoInto(existing.productInformation, item.productInformation);
-        }
-      }
-      items = Array.from(merged.values());
-    } else {
-      items = await fetchSkuData(skus, COUNTRY_MAP[countryFilter], softwareSystem);
-    }
+    items = await fetchSkuData(skus, country, softwareSystem);
 
     const rows = items.map(transformItem);
 
