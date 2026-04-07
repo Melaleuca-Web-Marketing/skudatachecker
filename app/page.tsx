@@ -257,6 +257,8 @@ const SECTION_ACCENTS: Record<SectionKey, string> = {
 type AnyValidationRule = {
   highlightColumns: string[];
   passes: (row: unknown, validationDate: string) => boolean;
+  /** Return true if empty section data should NOT be treated as a fail. */
+  allowEmpty?: (dashboardRow: DashboardRow) => boolean;
 };
 
 const VALIDATION_RULES: Partial<Record<SectionKey, AnyValidationRule>> = {
@@ -294,6 +296,9 @@ const VALIDATION_RULES: Partial<Record<SectionKey, AnyValidationRule>> = {
       const r = row as KitDetailsRow;
       return isWindowValid(r.startDate, r.endDate, vd);
     },
+    allowEmpty: (dashboardRow) =>
+      dashboardRow.details.length === 0 ||
+      dashboardRow.details.every((d) => d.kitType === "NotAKit"),
   },
 };
 
@@ -1261,9 +1266,15 @@ function CombinedSectionsTable({
         const data = row[sectionKey];
         if (!Array.isArray(data)) return;
         const failing = new Set<number>();
-        (data as unknown[]).forEach((item, idx) => {
-          if (!rule.passes(item, validationDate)) failing.add(idx);
-        });
+        if ((data as unknown[]).length === 0) {
+          if (!rule.allowEmpty || !rule.allowEmpty(row)) {
+            failing.add(-1); // sentinel: section has no data — counts as a fail
+          }
+        } else {
+          (data as unknown[]).forEach((item, idx) => {
+            if (!rule.passes(item, validationDate)) failing.add(idx);
+          });
+        }
         if (failing.size > 0) sectionMap.set(sectionKey, failing);
       });
       if (sectionMap.size > 0) result.set(rowIndex, sectionMap);
@@ -1431,9 +1442,7 @@ function CombinedSectionsTable({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Section controls</p>
-          <p className={`text-sm ${isDark ? "text-slate-300" : "text-slate-500"}`}>
-            Toggle each header to collapse or expand the columns it owns.
-          </p>
+          
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1475,9 +1484,7 @@ function CombinedSectionsTable({
 
       <div className={`rounded-2xl border px-4 py-3 ${isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white"}`}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className={`text-sm ${isDark ? "text-slate-300" : "text-slate-500"}`}>Drag the right edge of any column header to resize it Excel-style.</p>
-          </div>
+         
 
           <button
             type="button"
@@ -1727,6 +1734,10 @@ function CombinedSectionsTable({
                         const stickyLeft = isSticky && columnIndex === 0 ? SUMMARY_COLUMN_WIDTH : undefined;
                         const arr = Array.isArray(data) ? data : [];
                         const isLastColumn = isLast && columnIndex === section.columns.length - 1;
+                        const sectionMissing =
+                          !!validationDate &&
+                          !!VALIDATION_RULES[section.key] &&
+                          arr.length === 0;
                         return (
                           <td
                             key={`cell-${rowIndex}-${section.key}-${column.header}`}
@@ -1753,7 +1764,12 @@ function CombinedSectionsTable({
                               }}
                             >
                               {arr.length === 0 ? (
-                                <span className="text-slate-400">--</span>
+                                <span className={sectionMissing
+                                  ? isDark ? "font-semibold text-rose-400" : "font-semibold text-rose-600"
+                                  : "text-slate-400"
+                                }>
+                                  {sectionMissing ? "No data" : "--"}
+                                </span>
                               ) : (
                                 arr.map((item, idx) => {
                                   const isEvenRow = idx % 2 === 0;
