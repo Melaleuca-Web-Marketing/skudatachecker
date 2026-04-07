@@ -179,6 +179,7 @@ type CombinedTableProps = {
   onExpandAll: () => void;
   onCollapseAll: () => void;
   theme: Theme;
+  validationDate: string;
 };
 
 type SectionVisibilityControlsProps = {
@@ -249,6 +250,51 @@ const SECTION_ACCENTS: Record<SectionKey, string> = {
   productWeight: "#a855f7", // violet
   skuCounters: "#60a5fa", // blue
   customsDetails: "#f97316", // orange
+};
+
+// ── Validation date rules ─────────────────────────────────────────────────────
+
+type AnyValidationRule = {
+  highlightColumns: string[];
+  passes: (row: unknown, validationDate: string) => boolean;
+};
+
+const VALIDATION_RULES: Partial<Record<SectionKey, AnyValidationRule>> = {
+  details: {
+    highlightColumns: ["Start Date", "End Date"],
+    passes: (row, vd) => {
+      const r = row as DetailsRow;
+      return isWindowValid(r.startDate, r.endDate, vd);
+    },
+  },
+  channelAvailability: {
+    highlightColumns: ["Start Date"],
+    passes: (row, vd) => {
+      const r = row as ChannelAvailabilityRow;
+      return r.salesChannel !== "Web" || isStartDateExact(r.startDate, vd);
+    },
+  },
+  pricing: {
+    highlightColumns: ["Start Date", "End Date"],
+    passes: (row, vd) => {
+      const r = row as PricingRow;
+      return isWindowValid(r.startDate, r.endDate, vd);
+    },
+  },
+  productPoints: {
+    highlightColumns: ["Start Date", "End Date"],
+    passes: (row, vd) => {
+      const r = row as ProductPointsRow;
+      return isWindowValid(r.startDate, r.endDate, vd);
+    },
+  },
+  kitDetails: {
+    highlightColumns: ["Start Date", "End Date"],
+    passes: (row, vd) => {
+      const r = row as KitDetailsRow;
+      return isWindowValid(r.startDate, r.endDate, vd);
+    },
+  },
 };
 
 const SUMMARY_COLUMN_WIDTH = 150;
@@ -1141,6 +1187,7 @@ export default function Page() {
           onExpandAll={expandAll}
           onCollapseAll={collapseAll}
           theme={theme}
+          validationDate={validationDate}
         />
       </div>
     </main>
@@ -1155,6 +1202,7 @@ function CombinedSectionsTable({
   onExpandAll,
   onCollapseAll,
   theme,
+  validationDate,
 }: CombinedTableProps) {
   const isDark = theme === "dark";
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -1200,6 +1248,28 @@ function CombinedSectionsTable({
   }, [sections]);
 
   const hasData = rows.length > 0;
+
+  // Pre-compute which item indices fail validation per section per SKU row.
+  const failingRowIndices = useMemo(() => {
+    const result = new Map<number, Map<SectionKey, Set<number>>>();
+    if (!validationDate) return result;
+    rows.forEach((row, rowIndex) => {
+      const sectionMap = new Map<SectionKey, Set<number>>();
+      (Object.keys(VALIDATION_RULES) as SectionKey[]).forEach((sectionKey) => {
+        const rule = VALIDATION_RULES[sectionKey];
+        if (!rule) return;
+        const data = row[sectionKey];
+        if (!Array.isArray(data)) return;
+        const failing = new Set<number>();
+        (data as unknown[]).forEach((item, idx) => {
+          if (!rule.passes(item, validationDate)) failing.add(idx);
+        });
+        if (failing.size > 0) sectionMap.set(sectionKey, failing);
+      });
+      if (sectionMap.size > 0) result.set(rowIndex, sectionMap);
+    });
+    return result;
+  }, [rows, validationDate]);
 
   useEffect(() => {
     const baseWidths: Record<string, number> = {};
@@ -1617,6 +1687,9 @@ function CombinedSectionsTable({
                     const accent = SECTION_ACCENTS[section.key];
                     const isLast = sectionIndex === sections.length - 1;
                     const separator = isDark ? "rgba(148, 163, 184, 0.25)" : "rgba(148, 163, 184, 0.35)";
+                    const failingCount = validationDate
+                      ? (failingRowIndices.get(rowIndex)?.get(section.key)?.size ?? 0)
+                      : 0;
                     return [
                       <td
                         key={`cell-${rowIndex}-${section.key}-summary`}
@@ -1640,6 +1713,14 @@ function CombinedSectionsTable({
                           aria-hidden={expanded}
                         >
                           {section.summary(data as never)}
+                          {failingCount > 0 && (
+                            <div className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                              isDark ? "bg-rose-500/20 text-rose-300" : "bg-rose-50 text-rose-600"
+                            }`}>
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                              {failingCount} failing
+                            </div>
+                          )}
                         </div>
                       </td>,
                       ...section.columns.map((column, columnIndex) => {
@@ -1678,13 +1759,33 @@ function CombinedSectionsTable({
                                   const isEvenRow = idx % 2 === 0;
                                   const itemBg = isDark ? (isEvenRow ? `${accent}25` : `${accent}15`) : (isEvenRow ? `${accent}20` : `${accent}10`);
                                   const itemBorder = `1px solid ${isEvenRow ? `${accent}40` : `${accent}22`}`;
+                                  const rule = VALIDATION_RULES[section.key];
+                                  const itemFails =
+                                    !!validationDate &&
+                                    !!rule &&
+                                    (failingRowIndices.get(rowIndex)?.get(section.key)?.has(idx) ?? false);
+                                  const columnRelevant =
+                                    !!validationDate &&
+                                    !!rule &&
+                                    (rule.highlightColumns.length === 0 || rule.highlightColumns.includes(column.header));
+                                  const columnHighlighted = itemFails && columnRelevant;
+                                  const columnPasses = !itemFails && columnRelevant;
                                   return (
                                     <div
                                       key={`${section.key}-${rowIndex}-${idx}`}
                                       className="space-y-0.5 px-3 py-2"
                                       style={{
-                                        backgroundColor: itemBg,
+                                        backgroundColor: columnHighlighted
+                                          ? `color-mix(in srgb, ${isDark ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.15)"} 100%, ${itemBg})`
+                                          : columnPasses
+                                            ? `color-mix(in srgb, ${isDark ? "rgba(34,197,94,0.18)" : "rgba(34,197,94,0.12)"} 100%, ${itemBg})`
+                                            : itemBg,
                                         borderBottom: itemBorder,
+                                        borderLeft: columnHighlighted
+                                          ? "3px solid rgb(239,68,68)"
+                                          : columnPasses
+                                            ? "3px solid rgb(34,197,94)"
+                                            : "3px solid transparent",
                                         borderRadius: 0,
                                         margin: 0,
                                       }}
@@ -2019,4 +2120,33 @@ function formatDisplayDate(value?: string | null) {
 function formatBoolean(value?: boolean | null) {
   if (value === null || value === undefined) return "--";
   return value ? "Yes" : "No";
+}
+
+// ── Validation date helpers ───────────────────────────────────────────────────
+
+function toComparableDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = value.slice(0, 10);
+  if (d === "0001-01-01") return null;
+  return d;
+}
+
+function isWindowValid(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+  validationDate: string
+): boolean {
+  const start = toComparableDate(startDate);
+  const end = toComparableDate(endDate);
+  if (!start) return false;
+  return start <= validationDate && (end === null || end >= validationDate);
+}
+
+function isStartDateExact(
+  startDate: string | null | undefined,
+  validationDate: string
+): boolean {
+  const start = toComparableDate(startDate);
+  if (!start) return false;
+  return start === validationDate;
 }
