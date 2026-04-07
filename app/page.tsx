@@ -1511,7 +1511,7 @@ function CombinedSectionsTable({
                         return (
                           <td
                             key={`cell-${rowIndex}-${section.key}-${column.header}`}
-                            className={`px-3 ${expanded ? "py-2" : "py-0"} align-top ${column.className ?? ""} ${isDark ? "text-slate-100" : "text-slate-900"}`}
+                            className={`px-4 ${expanded ? "py-3" : "py-0"} align-top ${column.className ?? ""} ${isDark ? "text-slate-100" : "text-slate-900"}`}
                             style={{
                               ...detailCellStyle(expanded, accent, columnIndex === 0, stickyLeft, isDark),
                               width: expanded ? (columnWidths[`${section.key}-${columnIndex}`] ?? DETAIL_COLUMN_WIDTH) : 0,
@@ -1541,7 +1541,7 @@ function CombinedSectionsTable({
                                   return (
                                     <div
                                       key={`${section.key}-${rowIndex}-${idx}`}
-                                      className="space-y-0.5 px-2 py-1"
+                                      className="space-y-0.5 px-3 py-2"
                                       style={{
                                         backgroundColor: itemBg,
                                         borderBottom: itemBorder,
@@ -1549,7 +1549,7 @@ function CombinedSectionsTable({
                                         margin: 0,
                                       }}
                                     >
-                                      <div className="whitespace-normal break-words" style={{ padding: "2px 4px" }}>
+                                      <div className="whitespace-normal break-words">
                                         {column.render(item as never)}
                                       </div>
                                     </div>
@@ -1751,7 +1751,7 @@ function PlusMinusIcon({ expanded, isDark }: { expanded: boolean; isDark: boolea
 }
 
 function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isDark = false, stickyLeft?: number, stickyTop?: number) {
-  const width = SUMMARY_COLUMN_WIDTH;
+  const width = expanded ? 0 : SUMMARY_COLUMN_WIDTH;
   const tint = `${accent}22`;
   const collapsedTint = `${accent}12`;
   const solidBg = isDark ? "#0f172a" : "#f8fafc";
@@ -1761,7 +1761,7 @@ function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isD
     width,
     maxWidth: width,
     minWidth: width,
-    paddingInline: 0,
+    paddingInline: expanded ? 0 : undefined,
     overflow: "hidden",
     backgroundColor: sticky ? solidBg : expanded ? tint : collapsedTint,
     boxShadow: expanded ? `inset -2px 0 0 ${accent}33` : "none",
