@@ -1210,7 +1210,6 @@ function CombinedSectionsTable({
   validationDate,
 }: CombinedTableProps) {
   const isDark = theme === "dark";
-  const [controlsOpen, setControlsOpen] = useState(false);
   const [tableStickyActive, setTableStickyActive] = useState(false);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [headerHeights, setHeaderHeights] = useState({ section: 44, column: 44 });
@@ -1483,39 +1482,8 @@ function CombinedSectionsTable({
       </div>
 
       <div className={`rounded-2xl border px-4 py-3 ${isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white"}`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-         
-
-          <button
-            type="button"
-            onClick={() => setControlsOpen((prev) => !prev)}
-            className={`flex w-full items-center justify-between text-sm font-semibold ${
-              isDark ? "text-slate-100" : "text-slate-900"
-            }`}
-          aria-expanded={controlsOpen}
-        >
-          <span>Section chips</span>
-          <span
-            className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs ${
-              isDark ? "border-slate-700 text-slate-200" : "border-slate-300 text-slate-700"
-            } ${controlsOpen ? "rotate-180" : ""} transition-transform`}
-            aria-hidden="true"
-          >
-            ▼
-          </span>
-        </button>
-        {controlsOpen && (
-          <div className="mt-3">
-            <SectionChipBar
-              sections={sections}
-              expandedSections={expandedSections}
-              onToggleSection={onToggleSection}
-              isDark={isDark}
-            />
-          </div>
-        )}
+          <p className={`text-sm ${isDark ? "text-slate-300" : "text-slate-500"}`}>Drag the right edge of any column header to resize it Excel-style.</p>
       </div>
-    </div>
 
       <div
         ref={tableWrapperRef}
@@ -1541,8 +1509,8 @@ function CombinedSectionsTable({
                           ? "border-slate-700 bg-slate-800 text-slate-200"
                           : "border-slate-200 bg-slate-50 text-slate-700"
                         : isDark
-                          ? "border-slate-700 bg-slate-900 text-slate-200"
-                          : "border-slate-200 bg-slate-50 text-slate-700"
+                          ? "border-slate-700 bg-slate-900 text-slate-200 cursor-pointer hover:bg-slate-800/60"
+                          : "border-slate-200 bg-slate-50 text-slate-700 cursor-pointer hover:bg-slate-100"
                     }`}
                     style={{
                       borderBottom: "0",
@@ -1554,25 +1522,22 @@ function CombinedSectionsTable({
                       ...(isSticky ? { left: 0, zIndex: 130 } : {}),
                       ["--section-accent" as string]: accent,
                     }}
+                    onClick={isSticky ? undefined : () => onToggleSection(section.key)}
                   >
                     {isSticky ? (
                       <div className={`text-left font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                         {section.title}
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => onToggleSection(section.key)}
-                        className={`flex w-full items-center justify-between gap-3 text-left font-semibold ${
-                          isDark ? "text-slate-100" : "text-slate-900"
-                        }`}
-                      >
+                      <div className={`flex w-full items-center justify-between gap-3 text-left font-semibold ${
+                        isDark ? "text-slate-100" : "text-slate-900"
+                      }`}>
                         <span className="min-w-0 flex-1 truncate">{section.title}</span>
                         <PlusMinusIcon expanded={expanded} isDark={isDark} />
                         <span className="sr-only">
                           {expanded ? "Collapse section" : "Expand section"}
                         </span>
-                      </button>
+                      </div>
                     )}
                   </th>
                 );
@@ -1588,7 +1553,7 @@ function CombinedSectionsTable({
                 return (
                   <Fragment key={`header-set-${section.key}`}>
                     <th
-                      className="px-3 py-1.5"
+                      className={`px-3 py-1.5 ${!isSticky ? "cursor-pointer" : ""}`}
                       style={{
                         ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined),
                         position: "sticky",
@@ -1597,27 +1562,15 @@ function CombinedSectionsTable({
                         backgroundColor: expanded ? accent : (isDark ? "#0b1221" : "#f8fafc"),
                         borderRight: isLast ? undefined : `1px solid ${separator}`,
                       }}
+                      onClick={isSticky ? undefined : () => onToggleSection(section.key)}
                     >
-                      {isSticky ? (
-                        <span
-                          className={`inline-flex w-full justify-between text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
-                            expanded ? "opacity-0" : "opacity-100"
-                          }`}
-                        >
-                          Summary
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onToggleSection(section.key)}
-                          className={`inline-flex w-full items-center justify-start gap-2 text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
-                            expanded ? "opacity-0" : "opacity-100"
-                          }`}
-                        >
-                          <span>Summary</span>
-                          <span className="sr-only">{expanded ? "Collapse section" : "Expand section"}</span>
-                        </button>
-                      )}
+                      <span
+                        className={`inline-flex w-full justify-between text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                          expanded ? "opacity-0" : "opacity-100"
+                        }`}
+                      >
+                        Summary
+                      </span>
                     </th>
                     {section.columns.map((column, columnIndex) => {
                       const stickyLeft = isSticky && columnIndex === 0 ? SUMMARY_COLUMN_WIDTH : undefined;
@@ -1827,66 +1780,6 @@ function CombinedSectionsTable({
         </table>
       </div>
     </section>
-  );
-}
-
-function SectionChipBar({
-  sections,
-  expandedSections,
-  onToggleSection,
-  isDark,
-}: {
-  sections: AnySectionConfig[];
-  expandedSections: Record<SectionKey, boolean>;
-  onToggleSection: (key: SectionKey) => void;
-  isDark: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {sections.map((section) => {
-        const isSticky = section.key === "skuInfo";
-        const expanded = isSticky ? true : expandedSections[section.key];
-        const accent = SECTION_ACCENTS[section.key];
-        return (
-          <button
-            key={`chip-${section.key}`}
-            type="button"
-            onClick={() => (isSticky ? undefined : onToggleSection(section.key))}
-            disabled={isSticky}
-            className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-              isSticky
-                ? isDark
-                  ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500"
-                  : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
-                : isDark
-                  ? "border-slate-700 bg-slate-800 text-slate-200 hover:border-indigo-400 hover:text-indigo-100"
-                  : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-700"
-            }`}
-            style={{
-              boxShadow: `inset 0 0 0 1px ${accent}22`,
-            }}
-          >
-            <span className="flex items-center gap-2">
-              <span className="inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: accent }} />
-              <span className="truncate">{section.title}</span>
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
-                expanded
-                  ? isDark
-                    ? "bg-emerald-500/20 text-emerald-100"
-                    : "bg-emerald-50 text-emerald-700"
-                  : isDark
-                    ? "bg-slate-800 text-slate-300"
-                    : "bg-slate-100 text-slate-500"
-              }`}
-            >
-              {expanded ? "Expanded" : "Collapsed"}
-            </span>
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
