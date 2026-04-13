@@ -388,17 +388,17 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Kit Type", render: (row) => row.kitType },
+      { header: "Country", render: (row) => formatText(row.country) },
+      { header: "Kit Type", render: (row) => formatText(row.kitType) },
       { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
       { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
-      { header: "Standard Weight", render: (row) => row.standardWeight },
+      { header: "Standard Weight", render: (row) => row.standardWeight ?? "--" },
       { header: "Freightable", render: (row) => formatBoolean(row.freightable) },
       { header: "Shippable", render: (row) => formatBoolean(row.shippable) },
       { header: "Commissionable", render: (row) => formatBoolean(row.commissionable) },
       { header: "Member Only", render: (row) => formatBoolean(row.memberOnly) },
-      { header: "CoO", render: (row) => row.coo },
-      { header: "Tariff Code", render: (row) => row.tariffCode },
+      { header: "CoO", initialWidth: 80, render: (row) => formatText(row.coo) },
+      { header: "Tariff Code", initialWidth: 160, className: "truncate", render: (row) => { const v = formatText(row.tariffCode); return v === "--" ? "--" : <span title={v} className="block truncate">{v}</span>; } },
     ],
   },
   ingredients: {
@@ -2029,6 +2029,11 @@ function formatDisplayDate(value?: string | null) {
 function formatBoolean(value?: boolean | null) {
   if (value === null || value === undefined) return "--";
   return value ? "Yes" : "No";
+}
+
+function formatText(value?: string | null) {
+  if (value === null || value === undefined || value.trim() === "") return "--";
+  return value;
 }
 
 // ── Validation date helpers ───────────────────────────────────────────────────
