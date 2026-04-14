@@ -1759,7 +1759,7 @@ function CombinedSectionsTable({
                                         margin: 0,
                                       }}
                                     >
-                                      <div className="whitespace-normal break-words">
+                                      <div className="truncate">
                                         {column.render(item as never)}
                                       </div>
                                     </div>
