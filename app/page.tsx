@@ -1529,10 +1529,18 @@ function CombinedSectionsTable({
                         {section.title}
                       </div>
                     ) : (
-                      <div className={`flex w-full items-center justify-between gap-3 text-left font-semibold ${
-                        isDark ? "text-slate-100" : "text-slate-900"
-                      }`}>
-                        <span className="min-w-0 flex-1 truncate">{section.title}</span>
+                      <div
+                        className={`inline-flex items-center gap-3 text-left font-semibold ${
+                          isDark ? "text-slate-100" : "text-slate-900"
+                        }`}
+                        style={{
+                          position: "sticky",
+                          left: SUMMARY_COLUMN_WIDTH,
+                          paddingLeft: "10px",
+                          backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                        }}
+                      >
+                        <span className="truncate">{section.title}</span>
                         <PlusMinusIcon expanded={expanded} isDark={isDark} />
                         <span className="sr-only">
                           {expanded ? "Collapse section" : "Expand section"}
