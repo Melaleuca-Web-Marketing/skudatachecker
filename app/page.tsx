@@ -158,7 +158,12 @@ type ColumnDescriptor<K extends SectionKey> = {
   className?: string;
   initialWidth?: number;
   render: (row: SectionRowMap[K][number]) => ReactNode;
+  /** Optional raw value for sorting — use this for dates, numbers, etc. Falls back to rendered text. */
+  sortValue?: (row: SectionRowMap[K][number]) => string | number;
 };
+
+type SortEntry = { colIndex: number; dir: "asc" | "desc" };
+type SectionSortState = Record<string, SortEntry[]>;
 
 type SectionConfig<K extends SectionKey> = {
   key: K;
@@ -390,9 +395,9 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     columns: [
       { header: "Country", render: (row) => formatText(row.country) },
       { header: "Kit Type", render: (row) => formatText(row.kitType) },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
-      { header: "Standard Weight", render: (row) => row.standardWeight ?? "--" },
+      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
+      { header: "Standard Weight", render: (row) => row.standardWeight ?? "--", sortValue: (row) => row.standardWeight ?? 0 },
       { header: "Freightable", render: (row) => formatBoolean(row.freightable) },
       { header: "Shippable", render: (row) => formatBoolean(row.shippable) },
       { header: "Commissionable", render: (row) => formatBoolean(row.commissionable) },
@@ -453,8 +458,8 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       { header: "Country", render: (row) => row.country },
       { header: "Warehouse", initialWidth: 220, className: "truncate", render: (row) => <span title={row.warehouse} className="block truncate">{row.warehouse}</span> },
       { header: "Sales Channel", render: (row) => row.salesChannel },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
       { header: "Available", render: (row) => formatBoolean(row.available) },
     ],
   },
@@ -479,9 +484,9 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     columns: [
       { header: "Country", render: (row) => row.country },
       { header: "Price Type", render: (row) => row.priceType },
-      { header: "Price", className: "text-right font-mono", render: (row) => currencyFormatter.format(row.price) },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Price", className: "text-right font-mono", render: (row) => currencyFormatter.format(row.price), sortValue: (row) => row.price },
+      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
     ],
   },
   productPoints: {
@@ -505,9 +510,9 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     columns: [
       { header: "Country", render: (row) => row.country },
       { header: "Product Points Type", render: (row) => row.productPointsType },
-      { header: "Value", className: "text-right font-mono", render: (row) => row.value },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Value", className: "text-right font-mono", render: (row) => row.value, sortValue: (row) => row.value },
+      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
     ],
   },
   kitDetails: {
@@ -530,15 +535,15 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
     },
     columns: [
       { header: "Country", initialWidth: 100, render: (row) => row.country },
-      { header: "Quantity", initialWidth: 75, className: "text-right font-mono", render: (row) => row.quantity },
-      { header: "Sort Order", initialWidth: 85, className: "text-right font-mono", render: (row) => row.sortOrder },
-      { header: "New Sort Order", initialWidth: 100, className: "text-right font-mono", render: (row) => row.newSortOrder },
+      { header: "Quantity", initialWidth: 75, className: "text-right font-mono", render: (row) => row.quantity, sortValue: (row) => row.quantity },
+      { header: "Sort Order", initialWidth: 85, className: "text-right font-mono", render: (row) => row.sortOrder, sortValue: (row) => row.sortOrder },
+      { header: "New Sort Order", initialWidth: 100, className: "text-right font-mono", render: (row) => row.newSortOrder, sortValue: (row) => row.newSortOrder },
       { header: "Parent SKU", initialWidth: 100, render: (row) => row.parentSku },
       { header: "Child SKU", initialWidth: 100, render: (row) => row.childSku },
       { header: "Child SKU Description", initialWidth: 280, className: "truncate", render: (row) => <span title={row.childSkuDescription} className="block truncate">{row.childSkuDescription}</span> },
       { header: "Select Type", initialWidth: 105, render: (row) => row.selectType },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
     ],
   },
   businessRules: {
@@ -1214,6 +1219,38 @@ function CombinedSectionsTable({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [headerHeights, setHeaderHeights] = useState({ section: 44, column: 44 });
   const [resizing, setResizing] = useState<{ colId: string; startX: number; startWidth: number } | null>(null);
+  const [sortState, setSortState] = useState<SectionSortState>({});
+
+  function handleColumnSort(sectionKey: SectionKey, colIndex: number, shiftKey: boolean) {
+    setSortState((prev) => {
+      const current = prev[sectionKey] ?? [];
+      const existingIdx = current.findIndex((e) => e.colIndex === colIndex);
+
+      if (shiftKey) {
+        // Shift+click: append, toggle, or remove from multi-sort
+        if (existingIdx === -1) {
+          return { ...prev, [sectionKey]: [...current, { colIndex, dir: "asc" }] };
+        }
+        const entry = current[existingIdx];
+        if (entry.dir === "asc") {
+          const updated = [...current];
+          updated[existingIdx] = { colIndex, dir: "desc" };
+          return { ...prev, [sectionKey]: updated };
+        }
+        // desc → remove
+        const updated = current.filter((_, i) => i !== existingIdx);
+        return { ...prev, [sectionKey]: updated };
+      } else {
+        // Plain click: single-sort cycle asc → desc → clear
+        if (existingIdx === -1 || current.length > 1) {
+          return { ...prev, [sectionKey]: [{ colIndex, dir: "asc" }] };
+        }
+        const entry = current[0];
+        if (entry.dir === "asc") return { ...prev, [sectionKey]: [{ colIndex, dir: "desc" }] };
+        return { ...prev, [sectionKey]: [] };
+      }
+    });
+  }
   const tableWrapperRef = useRef<HTMLDivElement | null>(null);
   const sectionHeaderRowRef = useRef<HTMLTableRowElement | null>(null);
   const columnHeaderRowRef = useRef<HTMLTableRowElement | null>(null);
@@ -1478,6 +1515,19 @@ function CombinedSectionsTable({
           >
             Export CSV
           </button>
+          {Object.values(sortState).some((s) => s.length > 0) && (
+            <button
+              type="button"
+              onClick={() => setSortState({})}
+              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                isDark
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:text-amber-50"
+                  : "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:text-amber-900"
+              }`}
+            >
+              Reset Sort
+            </button>
+          )}
         </div>
       </div>
 
@@ -1584,13 +1634,14 @@ function CombinedSectionsTable({
                       const stickyLeft = isSticky && columnIndex === 0 ? SUMMARY_COLUMN_WIDTH : undefined;
                       const colId = `${section.key}-${columnIndex}`;
                       const colWidth = columnWidths[colId] ?? DETAIL_COLUMN_WIDTH;
-                      const headerBackground = isSticky
-                        ? accent
-                        : accent;
+                      const headerBackground = isSticky ? accent : accent;
+                      const sectionSort = sortState[section.key] ?? [];
+                      const sortEntry = sectionSort.find((e) => e.colIndex === columnIndex);
+                      const sortPriority = sectionSort.findIndex((e) => e.colIndex === columnIndex);
                       return (
                         <th
                           key={`header-${section.key}-${column.header}`}
-                          className={`px-3 py-1.5 ${column.className ?? ""} relative`}
+                          className={`px-3 py-1.5 ${column.className ?? ""} relative ${expanded ? "cursor-pointer select-none" : ""}`}
                           data-colid={colId}
                           style={{
                             ...detailCellStyle(expanded, accent, columnIndex === 0, stickyLeft, isDark),
@@ -1606,6 +1657,7 @@ function CombinedSectionsTable({
                                 ? `1px solid ${separator}`
                                 : undefined,
                           }}
+                          onClick={expanded ? (e) => handleColumnSort(section.key, columnIndex, e.shiftKey) : undefined}
                         >
                           <div
                             className="column-resizer"
@@ -1616,11 +1668,24 @@ function CombinedSectionsTable({
                           />
                           <span
                             onDoubleClick={() => autoFitColumn(colId)}
-                            className={`inline-flex w-full justify-between text-left font-semibold ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                            className={`inline-flex w-full items-center justify-between gap-1 text-left font-semibold ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
                               expanded ? "opacity-100" : "opacity-0"
                             }`}
                           >
-                            {column.header}
+                            <span className="truncate">{column.header}</span>
+                            {sortEntry && (
+                              <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold">
+                                {sectionSort.length > 1 && (
+                                  <span className={`rounded-full px-1 py-px ${isDark ? "bg-white/20" : "bg-black/10"}`}>
+                                    {sortPriority + 1}
+                                  </span>
+                                )}
+                                {sortEntry.dir === "asc" ? "↑" : "↓"}
+                              </span>
+                            )}
+                            {!sortEntry && expanded && (
+                              <span className={`flex-shrink-0 text-[10px] opacity-0 group-hover:opacity-40`}>↕</span>
+                            )}
                           </span>
                         </th>
                       );
@@ -1658,6 +1723,24 @@ function CombinedSectionsTable({
                     const failingCount = validationDate
                       ? (failingRowIndices.get(rowIndex)?.get(section.key)?.size ?? 0)
                       : 0;
+
+                    // Apply multi-column sort to this section's data
+                    const sectionSort = sortState[section.key] ?? [];
+                    const rawArr = Array.isArray(data) ? (data as unknown[]) : [];
+                    const sortedArr = sectionSort.length === 0 ? rawArr : [...rawArr].sort((a, b) => {
+                      for (const { colIndex, dir } of sectionSort) {
+                        const col = section.columns[colIndex] as ColumnDescriptor<typeof section.key>;
+                        const aVal = col.sortValue
+                          ? col.sortValue(a as never)
+                          : getTextFromReactNode(col.render(a as never));
+                        const bVal = col.sortValue
+                          ? col.sortValue(b as never)
+                          : getTextFromReactNode(col.render(b as never));
+                        const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                        if (cmp !== 0) return dir === "asc" ? cmp : -cmp;
+                      }
+                      return 0;
+                    });
                     return [
                       <td
                         key={`cell-${rowIndex}-${section.key}-summary`}
@@ -1693,7 +1776,7 @@ function CombinedSectionsTable({
                       </td>,
                       ...section.columns.map((column, columnIndex) => {
                         const stickyLeft = isSticky && columnIndex === 0 ? SUMMARY_COLUMN_WIDTH : undefined;
-                        const arr = Array.isArray(data) ? data : [];
+                        const arr = sortedArr;
                         const isLastColumn = isLast && columnIndex === section.columns.length - 1;
                         const sectionMissing =
                           !!validationDate &&
