@@ -1641,7 +1641,7 @@ function CombinedSectionsTable({
                       return (
                         <th
                           key={`header-${section.key}-${column.header}`}
-                          className={`px-3 py-1.5 ${column.className ?? ""} relative ${expanded ? "cursor-pointer select-none" : ""}`}
+                          className={`px-3 py-1.5 ${column.className ?? ""} relative group ${expanded ? "cursor-pointer select-none" : ""}`}
                           data-colid={colId}
                           style={{
                             ...detailCellStyle(expanded, accent, columnIndex === 0, stickyLeft, isDark),
@@ -1684,7 +1684,7 @@ function CombinedSectionsTable({
                               </span>
                             )}
                             {!sortEntry && expanded && (
-                              <span className={`flex-shrink-0 text-[10px] opacity-0 group-hover:opacity-40`}>↕</span>
+                              <span className="flex-shrink-0 text-[10px] opacity-25 transition-opacity duration-150 group-hover:opacity-70">↕</span>
                             )}
                           </span>
                         </th>
