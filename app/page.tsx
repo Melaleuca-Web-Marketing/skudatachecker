@@ -1018,6 +1018,7 @@ export default function Page() {
                     width={32}
                     height={32}
                     className="object-contain"
+                    style={{ height: "auto" }}
                     priority
                   />
                 </button>
@@ -2149,9 +2150,8 @@ function buildCsv(rows: DashboardRow[], sections: AnySectionConfig[]) {
 }
 
 function csvEscape(value: string) {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
+  if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`;
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }
 
@@ -2161,7 +2161,7 @@ function parseSkus(input: string): string[] {
     .map((value) => value.trim())
     .filter(Boolean);
   const unique = Array.from(new Set(values));
-  return unique.slice(0, 100);
+  return unique.slice(0, 60);
 }
 
 function formatDisplayDate(value?: string | null) {

@@ -159,6 +159,18 @@ const BASE_URL = (process.env.PRODUCT_API_BASE_URL ?? "").replace(/\/$/, "");
 const DEFAULT_SOFTWARE_SYSTEM = process.env.PRODUCT_API_SOFTWARE_SYSTEM ?? "NorthAmerica";
 const USER_ID = process.env.PRODUCT_API_USER_ID ?? "";
 
+const ALLOWED_SOFTWARE_SYSTEMS = [
+  "NorthAmerica",
+  "Taiwan",
+  "Japan",
+  "Australia",
+  "Korea",
+  "Europe",
+  "Singapore",
+  "China",
+  "Philippines",
+] as const;
+
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
 async function fetchSkuData(skus: string[], country: string, softwareSystem: string): Promise<ApiSkuItem[]> {
@@ -179,6 +191,7 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
       CorrelationId: "asdf",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -235,8 +248,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No SKUs provided" }, { status: 400 });
   }
 
+  if (skus.length > 60) {
+    return NextResponse.json({ error: "Too many SKUs (max 60)" }, { status: 400 });
+  }
+
   const country = body.country?.trim() || "";
   const softwareSystem = body.softwareSystem?.trim() || DEFAULT_SOFTWARE_SYSTEM;
+
+  if (!(ALLOWED_SOFTWARE_SYSTEMS as readonly string[]).includes(softwareSystem)) {
+    return NextResponse.json({ error: "Invalid software system." }, { status: 400 });
+  }
 
   try {
     let items: ApiSkuItem[];
@@ -246,9 +267,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ rows, meta: { rowCount: rows.length } }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined;
-    console.error("[dashboard] fetch failed:", message, cause ?? "");
-    return NextResponse.json({ error: cause ? `${message}: ${cause}` : message }, { status: 502 });
+    console.error("[dashboard] fetch failed:", err);
+    return NextResponse.json({ error: "Failed to fetch product data. Please try again." }, { status: 502 });
   }
 }
