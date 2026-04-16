@@ -1794,9 +1794,19 @@ function CombinedSectionsTable({
                               minWidth: expanded ? (columnWidths[`${section.key}-${columnIndex}`] ?? DETAIL_COLUMN_WIDTH) : 0,
                               borderRight: expanded && !isLastColumn ? `1px solid ${separator}` : "none",
                               borderLeft: "none",
+                              position: "relative",
                             }}
                             data-colid={`${section.key}-${columnIndex}`}
                           >
+                            {expanded && (
+                              <div
+                                className="column-resizer"
+                                role="separator"
+                                aria-orientation="horizontal"
+                                onMouseDown={startColumnResize(`${section.key}-${columnIndex}`)}
+                                onDoubleClick={() => autoFitColumn(`${section.key}-${columnIndex}`)}
+                              />
+                            )}
                             <div
                               className={`space-y-1 transition-opacity duration-200 ${
                                 expanded ? "opacity-100" : "opacity-0"
