@@ -171,6 +171,61 @@ const ALLOWED_SOFTWARE_SYSTEMS = [
   "Philippines",
 ] as const;
 
+type SoftwareSystem = (typeof ALLOWED_SOFTWARE_SYSTEMS)[number];
+
+class UpstreamFetchError extends Error {
+  country: string;
+  status: number;
+
+  constructor(country: string, status: number) {
+    super(`Upstream API returned ${status} for country=${country}`);
+    this.name = "UpstreamFetchError";
+    this.country = country;
+    this.status = status;
+  }
+}
+
+class AllCountriesFailedError extends Error {
+  softwareSystem: SoftwareSystem;
+  failedCountries: FailedCountryFetch[];
+
+  constructor(softwareSystem: SoftwareSystem, failedCountries: FailedCountryFetch[]) {
+    const failureSummary = failedCountries
+      .map(({ country, status }) => `${country} (${status})`)
+      .join(", ");
+    super(
+      `Upstream API returned failures for all ${softwareSystem} countries${failureSummary ? `: ${failureSummary}` : ""}`
+    );
+    this.name = "AllCountriesFailedError";
+    this.softwareSystem = softwareSystem;
+    this.failedCountries = failedCountries;
+  }
+}
+
+const SOFTWARE_SYSTEM_COUNTRIES: Record<SoftwareSystem, readonly string[]> = {
+  NorthAmerica: ["UnitedStates", "Canada", "Mexico", "MelaVanilla"],
+  Taiwan: ["Taiwan"],
+  Japan: ["Japan"],
+  Australia: ["Australia", "NewZealand"],
+  Korea: ["Korea", "HongKong"],
+  Europe: [
+    "UnitedKingdom",
+    "Ireland",
+    "Netherlands",
+    "Germany",
+    "Austria",
+    "Hungary",
+    "Poland",
+    "Spain",
+    "Lithuania",
+    "Latvia",
+    "Estonia",
+  ],
+  Singapore: ["Singapore", "Malaysia"],
+  China: ["China"],
+  Philippines: ["Philippines"],
+};
+
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
 async function fetchSkuData(skus: string[], country: string, softwareSystem: string): Promise<ApiSkuItem[]> {
@@ -188,17 +243,104 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
       accept: "text/plain",
       SoftwareSystem: softwareSystem,
       UserId: USER_ID,
-      CorrelationId: "asdf",
+      CorrelationId: `skuvd-${crypto.randomUUID()}`,
     },
     cache: "no-store",
     signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
-    throw new Error(`Upstream API returned ${res.status} for country=${country}`);
+    throw new UpstreamFetchError(country, res.status);
   }
 
   return res.json() as Promise<ApiSkuItem[]>;
+}
+
+function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
+  target.descriptions.push(...source.descriptions);
+  target.details.push(...source.details);
+  target.ingredients.push(...source.ingredients);
+  target.channelAvailability.push(...source.channelAvailability);
+  target.pricing.push(...source.pricing);
+  target.productPoints.push(...source.productPoints);
+  target.kitDetails.push(...source.kitDetails);
+  target.productBusinessRules.push(...source.productBusinessRules);
+  target.productBayLocation.push(...source.productBayLocation);
+  target.productDimension.push(...source.productDimension);
+  target.productWeight.push(...source.productWeight);
+  target.productSkuCounter.push(...source.productSkuCounter);
+  target.customsDetails.push(...source.customsDetails);
+}
+
+function mergeSkuItems(itemsByCountry: ApiSkuItem[][]) {
+  const merged = new Map<string, ApiSkuItem>();
+
+  for (const countryItems of itemsByCountry) {
+    for (const item of countryItems) {
+      const existing = merged.get(item.sku);
+      if (!existing) {
+        merged.set(item.sku, item);
+        continue;
+      }
+
+      mergeInfoInto(existing.productInformation, item.productInformation);
+    }
+  }
+
+  return Array.from(merged.values());
+}
+
+type FailedCountryFetch = {
+  country: string;
+  status: number | "ERR";
+};
+
+async function fetchSkuDataForSelection(
+  skus: string[],
+  country: string,
+  softwareSystem: SoftwareSystem,
+  countriesToQuery: readonly string[] = SOFTWARE_SYSTEM_COUNTRIES[softwareSystem]
+): Promise<{ items: ApiSkuItem[]; failedCountries: FailedCountryFetch[] }> {
+  if (country) {
+    return {
+      items: await fetchSkuData(skus, country, softwareSystem),
+      failedCountries: [],
+    };
+  }
+
+  const settled = await Promise.allSettled(
+    countriesToQuery.map(async (currentCountry) => ({
+      country: currentCountry,
+      items: await fetchSkuData(skus, currentCountry, softwareSystem),
+    }))
+  );
+
+  const itemsByCountry: ApiSkuItem[][] = [];
+  const failedCountries: FailedCountryFetch[] = [];
+
+  for (const result of settled) {
+    if (result.status === "fulfilled") {
+      itemsByCountry.push(result.value.items);
+      continue;
+    }
+
+    const reason = result.reason;
+    if (reason instanceof UpstreamFetchError) {
+      failedCountries.push({ country: reason.country, status: reason.status });
+      continue;
+    }
+
+    failedCountries.push({ country: "unknown", status: "ERR" });
+  }
+
+  if (!itemsByCountry.length) {
+    throw new AllCountriesFailedError(softwareSystem, failedCountries);
+  }
+
+  return {
+    items: mergeSkuItems(itemsByCountry),
+    failedCountries,
+  };
 }
 
 // ── Transform API shape → frontend DashboardRow shape ────────────────────────
@@ -259,13 +401,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid software system." }, { status: 400 });
   }
 
+  const validatedSoftwareSystem = softwareSystem as SoftwareSystem;
+  const allowedCountries = SOFTWARE_SYSTEM_COUNTRIES[validatedSoftwareSystem];
+
+  if (country && !allowedCountries.includes(country)) {
+    return NextResponse.json({ error: "Invalid country for the selected software system." }, { status: 400 });
+  }
+
   try {
-    let items: ApiSkuItem[];
-    items = await fetchSkuData(skus, country, softwareSystem);
+    const { items, failedCountries } = await fetchSkuDataForSelection(
+      skus,
+      country,
+      validatedSoftwareSystem,
+      allowedCountries
+    );
 
     const rows = items.map(transformItem);
 
-    return NextResponse.json({ rows, meta: { rowCount: rows.length } }, { status: 200 });
+    if (failedCountries.length) {
+      console.warn(
+        "[dashboard] partial country fetch failures:",
+        failedCountries.map(({ country: failedCountry, status }) => `${failedCountry} (${status})`).join(", ")
+      );
+    }
+
+    return NextResponse.json(
+      {
+        rows,
+        meta: {
+          rowCount: rows.length,
+          failedCountries: failedCountries.map(({ country: failedCountry, status }) => ({
+            country: failedCountry,
+            status,
+          })),
+        },
+      },
+      { status: 200 }
+    );
   } catch (err: unknown) {
     console.error("[dashboard] fetch failed:", err);
     return NextResponse.json({ error: "Failed to fetch product data. Please try again." }, { status: 502 });

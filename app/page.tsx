@@ -714,6 +714,9 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
   const [missingSkus, setMissingSkus] = useState<string[]>([]);
+  const [failedCountryFetches, setFailedCountryFetches] = useState<
+    { country: string; status: number | string }[]
+  >([]);
   const [softwareSystem, setSoftwareSystem] = useState("NorthAmerica");
   const [country, setCountry] = useState("");
   const [webOnly, setWebOnly] = useState(false);
@@ -782,6 +785,12 @@ export default function Page() {
     [softwareSystem]
   );
 
+  useEffect(() => {
+    if (country && !countryOptions.includes(country)) {
+      setCountry("");
+    }
+  }, [country, countryOptions]);
+
   const skus = useMemo(() => parseSkus(skuInput), [skuInput]);
   const sectionList: AnySectionConfig[] = useMemo(
     () => SECTION_ORDER.map((key) => SECTION_CONFIGS[key]),
@@ -825,11 +834,13 @@ export default function Page() {
   async function handleGenerate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMissingSkus([]);
+    setFailedCountryFetches([]);
     if (!skus.length) {
       setError("Enter at least one SKU to build the dashboard.");
       setRows(null);
       setLastGenerated(null);
       setMissingSkus([]);
+      setFailedCountryFetches([]);
       return;
     }
     setError(null);
@@ -849,8 +860,14 @@ export default function Page() {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
-      const json = (await res.json()) as { rows: DashboardRow[] };
+      const json = (await res.json()) as {
+        rows: DashboardRow[];
+        meta?: {
+          failedCountries?: { country: string; status: number | string }[];
+        };
+      };
       const resultRows = json.rows ?? [];
+      setFailedCountryFetches(json.meta?.failedCountries ?? []);
       setRows(resultRows);
       setLastGenerated(new Date());
       const normalizedRequested = skus.map((sku) => sku.trim().toLowerCase()).filter(Boolean);
@@ -877,6 +894,7 @@ export default function Page() {
       setError(`Fetch failed: ${err?.message ?? err}`);
       setRows(null);
       setMissingSkus([]);
+      setFailedCountryFetches([]);
     } finally {
       setLoading(false);
     }
@@ -1188,6 +1206,24 @@ export default function Page() {
           >
             No data returned for {missingSkus.length} SKU{missingSkus.length === 1 ? "" : "s"}:{" "}
             <span className="font-semibold">{missingSkus.join(", ")}</span>.
+          </p>
+        )}
+
+        {failedCountryFetches.length > 0 && (
+          <p
+            className={`mt-4 rounded-2xl border px-5 py-3 text-sm ${
+              isDark
+                ? "border-amber-400/40 bg-amber-400/10 text-amber-100"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            Some country requests failed and were skipped:{" "}
+            <span className="font-semibold">
+              {failedCountryFetches
+                .map(({ country: failedCountry, status }) => `${failedCountry} (${status})`)
+                .join(", ")}
+            </span>
+            .
           </p>
         )}
 
