@@ -1478,7 +1478,6 @@ function CombinedSectionsTable({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Section controls</p>
-          
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1895,47 +1894,65 @@ function SectionVisibilityToggles({
 }: SectionVisibilityControlsProps) {
   const isDark = theme === "dark";
   const disabledStyles = disabled ? "opacity-60 pointer-events-none" : "";
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem("sku-section-selection-open");
+    return stored === null ? true : stored === "true";
+  });
   return (
     <section
-      className={`mt-10 space-y-4 rounded-3xl border p-6 shadow-lg ${
+      className={`mt-10 rounded-3xl border p-6 shadow-lg ${
         isDark ? "border-slate-800 bg-slate-900 text-slate-100 shadow-slate-950/40" : "border-slate-200 bg-white text-slate-900 shadow-slate-900/5"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Section selection</p>
-          <p className={`text-sm ${isDark ? "text-slate-300" : "text-slate-500"}`}>
-            Toggle individual data sets.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onShowAll}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              isDark
-                ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
-                : "border-slate-200 bg-slate-50 text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
-            }`}
-            disabled={disabled}
+        <button
+          type="button"
+          onClick={() => {
+            const next = !open;
+            setOpen(next);
+            window.localStorage.setItem("sku-section-selection-open", String(next));
+          }}
+          className={`flex items-center gap-2 text-base font-semibold ${isDark ? "text-slate-100 hover:text-white" : "text-slate-900 hover:text-slate-700"}`}
+        >
+          Section selection
+          <svg
+            className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : "rotate-0"}`}
+            viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
           >
-            Show all
-          </button>
-          <button
-            type="button"
-            onClick={onHideAll}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              isDark
-                ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
-                : "border-slate-200 bg-white text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
-            }`}
-            disabled={disabled}
-          >
-            Hide all
-          </button>
-        </div>
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+          </svg>
+        </button>
+        {open && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onShowAll}
+              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                isDark
+                  ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
+                  : "border-slate-200 bg-slate-50 text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
+              }`}
+              disabled={disabled}
+            >
+              Show all
+            </button>
+            <button
+              type="button"
+              onClick={onHideAll}
+              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                isDark
+                  ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
+                  : "border-slate-200 bg-white text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
+              }`}
+              disabled={disabled}
+            >
+              Hide all
+            </button>
+          </div>
+        )}
       </div>
-      <div className={`flex flex-wrap gap-2 ${disabledStyles}`}>
+      {open && <div className={`mt-4 flex flex-wrap gap-2 ${disabledStyles}`}>
         {sections
           .filter((section) => section.key !== "skuInfo")
           .map((section) => {
@@ -1975,7 +1992,7 @@ function SectionVisibilityToggles({
             </button>
           );
         })}
-      </div>
+      </div>}
     </section>
   );
 }
