@@ -944,7 +944,7 @@ export default function Page() {
             <div className="relative h-12 w-12 flex-shrink-0">
               <Image
                 src={isDark ? leafLight : leafDark}
-                alt="SKU Data Checker logo"
+                alt="SKU Validation Dashboard logo"
                 fill
                 sizes="48px"
                 className="rounded-xl object-contain"
@@ -953,36 +953,85 @@ export default function Page() {
             </div>
             <div className="space-y-1">
               <h1 className={`text-3xl font-semibold sm:text-4xl ${isDark ? "text-white" : "text-slate-900"}`}>
-                SKU Data Checker
+                SKU Validation Dashboard
               </h1>
               <p className={`max-w-3xl text-base ${isDark ? "text-slate-300" : "text-slate-600"}`}>
                 Search SKUs to validate product data.
               </p>
             </div>
           </div>
-          <div className="flex flex-col items-center gap-1">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              className={`relative inline-flex h-12 w-12 items-center justify-center rounded-full border transition shadow-sm ${
-                isDark
-                  ? "border-slate-700 bg-slate-900 hover:border-emerald-400"
-                  : "border-slate-200 bg-white hover:border-emerald-500"
-              }`}
-            >
-              <Image
-                src={isDark ? leafLight : dropDark}
-                alt={isDark ? "Light theme" : "Dark theme"}
-                width={32}
-                height={32}
-                className="object-contain"
-                priority
-              />
-            </button>
-            <span className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              Theme
-            </span>
+          <div className="flex items-center gap-4">
+            {/* Software System */}
+            <div className="flex flex-col gap-1">
+              <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                Software System
+              </label>
+              <select
+                value={softwareSystem}
+                onChange={(e) => { setSoftwareSystem(e.target.value); setCountry(""); }}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                  isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
+                }`}
+              >
+                {SOFTWARE_SYSTEMS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Country */}
+            <div className="flex flex-col gap-1">
+              <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                Country
+                <span className={`ml-1.5 font-normal normal-case tracking-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>(optional)</span>
+              </label>
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                  isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
+                }`}
+              >
+                <option value="">All countries</option>
+                {countryOptions.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Theme */}
+            <div className={`flex flex-col items-center gap-1 border-l pl-4 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+              <div className="group relative inline-flex">
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                  className={`relative inline-flex h-12 w-12 items-center justify-center rounded-full border transition shadow-sm ${
+                    isDark
+                      ? "border-slate-700 bg-slate-900 hover:border-emerald-400"
+                      : "border-slate-200 bg-white hover:border-emerald-500"
+                  }`}
+                >
+                  <Image
+                    src={isDark ? leafLight : dropDark}
+                    alt={isDark ? "Light theme" : "Dark theme"}
+                    width={32}
+                    height={32}
+                    className="object-contain"
+                    priority
+                  />
+                </button>
+                <div className={`pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-48 -translate-x-1/2 rounded-xl border px-3 py-2 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 ${
+                  isDark ? "border-slate-700 bg-slate-800 text-slate-200" : "border-slate-200 bg-white text-slate-700"
+                }`}>
+                  Switch between light and dark mode.
+                  <div className={`absolute left-1/2 bottom-full -translate-x-1/2 border-4 border-transparent ${isDark ? "border-b-slate-700" : "border-b-slate-200"}`} />
+                </div>
+              </div>
+              <span className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                Theme
+              </span>
+            </div>
           </div>
         </header>
 
@@ -998,18 +1047,25 @@ export default function Page() {
               <label htmlFor="skuInput" className={`text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
                 SKU List
               </label>
-              <span
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold ${
-                  isDark
-                    ? "border-slate-700 text-slate-200 hover:border-indigo-300 hover:text-indigo-200"
-                    : "border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600"
-                }`}
-                title="Paste multiple SKUs separated by commas, spaces, or new lines."
-                aria-label="SKU input help"
-                role="img"
-              >
-                ?
-              </span>
+              <div className="group relative inline-flex">
+                <span
+                  className={`inline-flex h-6 w-6 cursor-default items-center justify-center rounded-full border text-[11px] font-semibold ${
+                    isDark
+                      ? "border-slate-700 text-slate-200 hover:border-indigo-300 hover:text-indigo-200"
+                      : "border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600"
+                  }`}
+                  aria-label="SKU input help"
+                  role="img"
+                >
+                  ?
+                </span>
+                <div className={`pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl border px-3 py-2 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 ${
+                  isDark ? "border-slate-700 bg-slate-800 text-slate-200" : "border-slate-200 bg-white text-slate-700"
+                }`}>
+                  Paste multiple SKUs separated by commas, spaces, or new lines.
+                  <div className={`absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent ${isDark ? "border-t-slate-700" : "border-t-slate-200"}`} />
+                </div>
+              </div>
               {skus.length > 0 && (
                 <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   {skus.length} SKU{skus.length === 1 ? "" : "s"} detected
@@ -1027,52 +1083,6 @@ export default function Page() {
               value={skuInput}
               onChange={(event) => setSkuInput(event.target.value)}
             />
-          </div>
-
-          {/* ── API Config ── */}
-          <div className={`rounded-2xl border p-4 ${isDark ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50"}`}>
-        
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-              {/* Software System */}
-              <div className="flex flex-col gap-1">
-                <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
-                  Software System
-                </label>
-                <select
-                  value={softwareSystem}
-                  onChange={(e) => { setSoftwareSystem(e.target.value); setCountry(""); }}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                    isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
-                  }`}
-                >
-                  {SOFTWARE_SYSTEMS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Country */}
-              <div className="flex flex-col gap-1">
-                <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
-                  Country
-                  <span className={`ml-1.5 font-normal normal-case tracking-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>(optional)</span>
-                </label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                    isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
-                  }`}
-                >
-                  <option value="">All countries</option>
-                  {countryOptions.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-            </div>
           </div>
 
           {/* ── Filters (accordion) ── */}

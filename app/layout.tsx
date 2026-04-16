@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SKU Data Checker',
+  title: 'SKU Validation Dashboard',
   description: 'Validate SKU data with ease.',
 };
 
