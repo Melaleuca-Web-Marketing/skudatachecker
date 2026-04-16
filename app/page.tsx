@@ -1476,8 +1476,28 @@ function CombinedSectionsTable({
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-2">
           <p className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Section controls</p>
+          <div className="group relative inline-flex">
+            <span
+              className={`inline-flex h-6 w-6 cursor-default items-center justify-center rounded-full border text-[11px] font-semibold ${
+                isDark
+                  ? "border-slate-700 text-slate-200 hover:border-indigo-300 hover:text-indigo-200"
+                  : "border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600"
+              }`}
+              title="Click a section to expand, then drag the column edges to resize like Excel."
+              aria-label="Tips"
+              role="img"
+            >
+              ?
+            </span>
+            <div className={`pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl border px-3 py-2 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 ${
+              isDark ? "border-slate-700 bg-slate-800 text-slate-200" : "border-slate-200 bg-white text-slate-700"
+            }`}>
+              Click a section to expand, then drag the column edges to resize like Excel.
+              <div className={`absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent ${isDark ? "border-t-slate-700" : "border-t-slate-200"}`} />
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1530,9 +1550,6 @@ function CombinedSectionsTable({
         </div>
       </div>
 
-      <div className={`rounded-2xl border px-4 py-3 ${isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white"}`}>
-          <p className={`text-sm ${isDark ? "text-slate-300" : "text-slate-500"}`}>Drag the right edge of any column header to resize it Excel-style.</p>
-      </div>
 
       <div
         ref={tableWrapperRef}
