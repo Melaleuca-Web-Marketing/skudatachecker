@@ -2,6 +2,13 @@
 
 import Image from "next/image";
 import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  exportDashboardWorkbook,
+  type ExportCellValue,
+  type ExportContext,
+  type ExportWarning,
+  type ExportWorkbookSection,
+} from "./exportWorkbook";
 import leafLight from "../assets/leaf-light.png";
 import leafDark from "../assets/leaf-dark.png";
 import dropDark from "../assets/leaf-dark.png";
@@ -151,6 +158,11 @@ type DashboardRow = {
   sku: string;
 } & SectionRowMap;
 
+type FailedCountryFetch = {
+  country: string;
+  status: number | string;
+};
+
 type Theme = "light" | "dark";
 
 type ColumnDescriptor<K extends SectionKey> = {
@@ -183,6 +195,8 @@ type CombinedTableProps = {
   onToggleSection: (key: SectionKey) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  onExport: () => void | Promise<void>;
+  exporting: boolean;
   theme: Theme;
   validationDate: string;
 };
@@ -712,11 +726,10 @@ export default function Page() {
   const [rows, setRows] = useState<DashboardRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
   const [missingSkus, setMissingSkus] = useState<string[]>([]);
-  const [failedCountryFetches, setFailedCountryFetches] = useState<
-    { country: string; status: number | string }[]
-  >([]);
+  const [failedCountryFetches, setFailedCountryFetches] = useState<FailedCountryFetch[]>([]);
   const [softwareSystem, setSoftwareSystem] = useState("NorthAmerica");
   const [country, setCountry] = useState("");
   const [webOnly, setWebOnly] = useState(false);
@@ -808,7 +821,20 @@ export default function Page() {
       ),
     }));
   }, [rows, webOnly]);
-  const hasRows = !!rows?.length;
+  const exportWarnings = useMemo<ExportWarning[]>(
+    () =>
+      failedCountryFetches.length
+        ? [
+            {
+              title: "Failed country requests",
+              details: failedCountryFetches.map(
+                ({ country: failedCountry, status }) => `${failedCountry} (${status})`
+              ),
+            },
+          ]
+        : [],
+    [failedCountryFetches]
+  );
 
   useEffect(() => {
     setExpandedSections(buildCollapsedState());
@@ -863,7 +889,7 @@ export default function Page() {
       const json = (await res.json()) as {
         rows: DashboardRow[];
         meta?: {
-          failedCountries?: { country: string; status: number | string }[];
+          failedCountries?: FailedCountryFetch[];
         };
       };
       const resultRows = json.rows ?? [];
@@ -950,6 +976,34 @@ export default function Page() {
 
   function toggleTheme() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }
+
+  async function handleExportExcel() {
+    if (!displayRows?.length) return;
+
+    setError(null);
+    setExporting(true);
+    try {
+      const exportSections = buildExportSections(displayRows, visibleSections);
+      const exportContext: ExportContext = {
+        softwareSystem,
+        country,
+        validationDate,
+        webOnly,
+        skus,
+        visibleSections: visibleSections.map((section) => section.title),
+        rowCount: displayRows.length,
+        generatedAt: new Date(),
+        warnings: exportWarnings,
+        requestedBy: "",
+      };
+
+      await exportDashboardWorkbook(exportContext, exportSections);
+    } catch (err: any) {
+      setError(`Export failed: ${err?.message ?? err}`);
+    } finally {
+      setExporting(false);
+    }
   }
 
   const isDark = theme === "dark";
@@ -1243,6 +1297,8 @@ export default function Page() {
           onToggleSection={toggleSection}
           onExpandAll={expandAll}
           onCollapseAll={collapseAll}
+          onExport={handleExportExcel}
+          exporting={exporting}
           theme={theme}
           validationDate={validationDate}
         />
@@ -1258,6 +1314,8 @@ function CombinedSectionsTable({
   onToggleSection,
   onExpandAll,
   onCollapseAll,
+  onExport,
+  exporting,
   theme,
   validationDate,
 }: CombinedTableProps) {
@@ -1438,16 +1496,6 @@ function CombinedSectionsTable({
       });
   };
 
-  const getTextFromReactNode = (node: ReactNode): string => {
-    if (node === null || node === undefined || typeof node === "boolean") return "";
-    if (typeof node === "string" || typeof node === "number") return String(node);
-    if (Array.isArray(node)) return node.map(getTextFromReactNode).join("");
-    if (typeof node === "object" && "props" in node && (node as any)?.props?.children) {
-      return getTextFromReactNode((node as any).props.children);
-    }
-    return "";
-  };
-
   const autoFitColumn = (colId: string) => {
     const sectionKey = colId.split("-")[0] as SectionKey;
     const columnIndex = Number(colId.split("-")[1]);
@@ -1489,18 +1537,6 @@ function CombinedSectionsTable({
       startWidth: columnWidths[colId] ?? DETAIL_COLUMN_WIDTH,
     });
   };
-
-  function handleExportCsv() {
-    if (!hasData) return;
-    const csv = buildCsv(rows, sections);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `sku-export-${Date.now()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
 
   if (!sections.length) {
     return (
@@ -1571,15 +1607,15 @@ function CombinedSectionsTable({
           </button>
           <button
             type="button"
-            onClick={handleExportCsv}
-            disabled={!hasData}
+            onClick={() => void onExport()}
+            disabled={!hasData || exporting}
             className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
               isDark
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400 hover:text-emerald-50"
                 : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:text-emerald-900"
             } disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            Export CSV
+            {exporting ? "Preparing Excel..." : "Export Excel"}
           </button>
           {Object.values(sortState).some((s) => s.length > 0) && (
             <button
@@ -2146,49 +2182,81 @@ function detailCellStyle(
   };
 }
 
-function buildCsv(rows: DashboardRow[], sections: AnySectionConfig[]) {
-  const headers = ["SKU", ...sections.flatMap((section) => section.columns.map((col) => `${section.title} - ${col.header}`))];
-  const lines = [headers.map(csvEscape).join(",")];
-
-  const formatValue = (value: React.ReactNode) => {
-    if (value === null || value === undefined) return "";
-    if (typeof value === "string" || typeof value === "number") return String(value);
-    if (typeof value === "boolean") return value ? "true" : "false";
-    return "";
-  };
-
-  rows.forEach((row) => {
-    const cells: string[] = [row.sku];
-    sections.forEach((section) => {
-      const data = Array.isArray(row[section.key]) ? (row[section.key] as any[]) : [];
-      section.columns.forEach((column) => {
-        if (!data.length) {
-          cells.push("--");
-          return;
-        }
-        const rendered = data
-          .map((item) => {
-            try {
-              return formatValue(column.render(item as never));
-            } catch {
-              return "";
-            }
-          })
-          .filter((v) => v !== "")
-          .join(" | ");
-        cells.push(rendered || "--");
-      });
-    });
-    lines.push(cells.map(csvEscape).join(","));
-  });
-
-  return lines.join("\n");
+function getTextFromReactNode(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(getTextFromReactNode).join("");
+  if (typeof node === "object" && "props" in node && (node as any)?.props?.children) {
+    return getTextFromReactNode((node as any).props.children);
+  }
+  return "";
 }
 
-function csvEscape(value: string) {
-  if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`;
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+function toExportCellValue(value: ReactNode): ExportCellValue {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  return getTextFromReactNode(value);
+}
+
+function toExcelColumnWidth(column: { header: string; initialWidth?: number }) {
+  const headerWidth = column.header.trim().length + 2;
+  const pixelWidth = column.initialWidth ? Math.ceil(column.initialWidth / 8) : 0;
+  return Math.min(Math.max(headerWidth, pixelWidth, 10), 80);
+}
+
+function buildExportSections(
+  rows: DashboardRow[],
+  sections: AnySectionConfig[]
+): ExportWorkbookSection[] {
+  return sections.map((section) => {
+    const sectionColumns =
+      section.key === "skuInfo"
+        ? section.columns.map((column) => ({
+            header: column.header,
+            width: toExcelColumnWidth(column),
+          }))
+        : [
+            { header: "SKU", width: 16 },
+            ...section.columns.map((column) => ({
+              header: column.header,
+              width: toExcelColumnWidth(column),
+            })),
+          ];
+
+    const sectionRows: ExportCellValue[][] = [];
+
+    if (section.key === "skuInfo") {
+      rows.forEach((row) => {
+        sectionRows.push([row.sku]);
+      });
+    } else {
+      rows.forEach((row) => {
+        const sectionData = Array.isArray(row[section.key]) ? (row[section.key] as any[]) : [];
+        sectionData.forEach((item) => {
+          sectionRows.push([
+            row.sku,
+            ...section.columns.map((column) => {
+              try {
+                return toExportCellValue(column.render(item as never));
+              } catch {
+                return "";
+              }
+            }),
+          ]);
+        });
+      });
+    }
+
+    return {
+      key: section.key,
+      title: section.title,
+      columns: sectionColumns,
+      rows: sectionRows,
+      emptyMessage: "No data for current query.",
+    };
+  });
 }
 
 function parseSkus(input: string): string[] {
