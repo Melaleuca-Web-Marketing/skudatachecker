@@ -1395,28 +1395,31 @@ function CombinedSectionsTable({
 
   const hasData = rows.length > 0;
 
-  // Pre-compute which item indices fail validation per section per SKU row.
-  const failingRowIndices = useMemo(() => {
-    const result = new Map<number, Map<SectionKey, Set<number>>>();
+  // Pre-compute which items fail validation per section per SKU row.
+  const failingItemsByRow = useMemo(() => {
+    const result = new Map<number, Map<SectionKey, { hasEmptyFailure: boolean; failingItems: Set<unknown> }>>();
     if (!validationDate) return result;
     rows.forEach((row, rowIndex) => {
-      const sectionMap = new Map<SectionKey, Set<number>>();
+      const sectionMap = new Map<SectionKey, { hasEmptyFailure: boolean; failingItems: Set<unknown> }>();
       (Object.keys(VALIDATION_RULES) as SectionKey[]).forEach((sectionKey) => {
         const rule = VALIDATION_RULES[sectionKey];
         if (!rule) return;
         const data = row[sectionKey];
         if (!Array.isArray(data)) return;
-        const failing = new Set<number>();
+        const failingItems = new Set<unknown>();
+        let hasEmptyFailure = false;
         if ((data as unknown[]).length === 0) {
           if (!rule.allowEmpty || !rule.allowEmpty(row)) {
-            failing.add(-1); // sentinel: section has no data — counts as a fail
+            hasEmptyFailure = true;
           }
         } else {
-          (data as unknown[]).forEach((item, idx) => {
-            if (!rule.passes(item, validationDate)) failing.add(idx);
+          (data as unknown[]).forEach((item) => {
+            if (!rule.passes(item, validationDate)) failingItems.add(item);
           });
         }
-        if (failing.size > 0) sectionMap.set(sectionKey, failing);
+        if (hasEmptyFailure || failingItems.size > 0) {
+          sectionMap.set(sectionKey, { hasEmptyFailure, failingItems });
+        }
       });
       if (sectionMap.size > 0) result.set(rowIndex, sectionMap);
     });
@@ -1819,8 +1822,9 @@ function CombinedSectionsTable({
                     const accent = SECTION_ACCENTS[section.key];
                     const isLast = sectionIndex === sections.length - 1;
                     const separator = isDark ? "rgba(148, 163, 184, 0.25)" : "rgba(148, 163, 184, 0.35)";
+                    const failingState = failingItemsByRow.get(rowIndex)?.get(section.key);
                     const failingCount = validationDate
-                      ? (failingRowIndices.get(rowIndex)?.get(section.key)?.size ?? 0)
+                      ? ((failingState?.failingItems.size ?? 0) + (failingState?.hasEmptyFailure ? 1 : 0))
                       : 0;
 
                     // Apply multi-column sort to this section's data
@@ -1845,12 +1849,20 @@ function CombinedSectionsTable({
                         key={`cell-${rowIndex}-${section.key}-summary`}
                         className={`px-3 py-2 align-top ${isSticky ? "" : "cursor-pointer select-none"} ${isDark ? "text-slate-100" : "text-slate-900"}`}
                         style={{
-                          ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined, headerHeights.section + headerHeights.column),
+                          ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined),
                           backgroundColor: isSticky
                             ? (isDark ? "#0f172a" : "#f8fafc")
                             : `color-mix(in srgb, ${expanded ? `${accent}22` : `${accent}12`} 100%, ${rowTint})`,
                           borderTop: rowIndex === 0 ? "none" : isDark ? "1px solid rgb(71 85 105 / 0.6)" : "1px solid rgb(148 163 184 / 0.5)",
                           borderRight: isLast ? undefined : `1px solid ${separator}`,
+                          ...(isSticky
+                            ? {
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 80,
+                                overflow: "visible",
+                              }
+                            : {}),
                         }}
                         onClick={() => (isSticky ? undefined : onToggleSection(section.key))}
                         role={isSticky ? undefined : "button"}
@@ -1861,6 +1873,18 @@ function CombinedSectionsTable({
                             expanded ? "opacity-0" : "opacity-100"
                           }`}
                           aria-hidden={expanded}
+                          style={
+                            isSticky
+                              ? {
+                                  position: "sticky",
+                                  top: headerHeights.section + headerHeights.column,
+                                  zIndex: 85,
+                                  paddingTop: "0.125rem",
+                                  paddingBottom: "0.125rem",
+                                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                                }
+                              : undefined
+                          }
                         >
                           {section.summary(data as never)}
                           {failingCount > 0 && (
@@ -1912,7 +1936,7 @@ function CombinedSectionsTable({
                               }`}
                               aria-hidden={!expanded}
                               style={{
-                                maxHeight: expanded ? "1200px" : "0px",
+                                maxHeight: expanded ? "none" : "0px",
                                 overflow: "hidden",
                               }}
                             >
@@ -1928,11 +1952,12 @@ function CombinedSectionsTable({
                                   const isEvenRow = idx % 2 === 0;
                                   const itemBg = isDark ? (isEvenRow ? `${accent}25` : `${accent}15`) : (isEvenRow ? `${accent}20` : `${accent}10`);
                                   const itemBorder = `1px solid ${isEvenRow ? `${accent}40` : `${accent}22`}`;
+                                  const renderedValue = column.render(item as never);
                                   const rule = VALIDATION_RULES[section.key];
                                   const itemFails =
                                     !!validationDate &&
                                     !!rule &&
-                                    (failingRowIndices.get(rowIndex)?.get(section.key)?.has(idx) ?? false);
+                                    (failingItemsByRow.get(rowIndex)?.get(section.key)?.failingItems.has(item) ?? false);
                                   const columnRelevant =
                                     !!validationDate &&
                                     !!rule &&
@@ -1959,8 +1984,8 @@ function CombinedSectionsTable({
                                         margin: 0,
                                       }}
                                     >
-                                      <div className="truncate">
-                                        {column.render(item as never)}
+                                      <div className="min-h-5 truncate leading-5">
+                                        {renderDetailValue(renderedValue, isDark)}
                                       </div>
                                     </div>
                                   );
@@ -2119,7 +2144,7 @@ function PlusMinusIcon({ expanded, isDark }: { expanded: boolean; isDark: boolea
   );
 }
 
-function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isDark = false, stickyLeft?: number, stickyTop?: number) {
+function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isDark = false, stickyLeft?: number) {
   const width = expanded ? 0 : SUMMARY_COLUMN_WIDTH;
   const tint = `${accent}22`;
   const collapsedTint = `${accent}12`;
@@ -2139,9 +2164,8 @@ function summaryCellStyle(expanded: boolean, accent: string, sticky = false, isD
     ...(sticky
       ? {
           position: "sticky" as const,
-          top: typeof stickyTop === "number" ? stickyTop : 88,
           ...(typeof stickyLeft === "number" ? { left: stickyLeft } : {}),
-          zIndex: 180,
+          zIndex: 90,
           backgroundColor: isDark ? "#0f172a" : "#f8fafc",
           boxShadow: stickyShadow,
         }
@@ -2190,6 +2214,14 @@ function getTextFromReactNode(node: ReactNode): string {
     return getTextFromReactNode((node as any).props.children);
   }
   return "";
+}
+
+function renderDetailValue(value: ReactNode, isDark: boolean) {
+  const normalizedText = getTextFromReactNode(value).trim();
+  if (!normalizedText) {
+    return <span className={isDark ? "text-slate-400" : "text-slate-500"}>--</span>;
+  }
+  return value;
 }
 
 function toExportCellValue(value: ReactNode): ExportCellValue {

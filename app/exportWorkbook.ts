@@ -1,5 +1,3 @@
-import type { Workbook, Worksheet } from "exceljs";
-
 export type ExportCellValue = string | number | boolean | null;
 
 export type ExportColumn = {
@@ -39,12 +37,57 @@ const EXPORT_CREATOR = "SKU Data Checker";
 // Preserve the visible text while ensuring formula-like values remain inert.
 const FORMULA_GUARD_PREFIX = "\u200B";
 
+type ExportWorkbookBuffer = ArrayBuffer | Uint8Array;
+
+type WorksheetLike = {
+  views: Array<{ state: string; ySplit: number }>;
+  columns: Array<{ width: number }>;
+  addRow: (values: unknown[]) => WorksheetRowLike;
+  addTable: (config: {
+    name: string;
+    ref: string;
+    headerRow: boolean;
+    totalsRow: boolean;
+    style: { theme: string; showRowStripes: boolean };
+    columns: Array<{ name: string; filterButton: boolean }>;
+    rows: Array<Array<string | number | boolean>>;
+  }) => void;
+  getColumn: (index: number) => { width: number };
+  getRow: (index: number) => WorksheetRowLike;
+};
+
+type WorksheetCellLike = {
+  value?: unknown;
+  fill?: unknown;
+  border?: unknown;
+  font?: unknown;
+  alignment?: unknown;
+};
+
+type WorksheetRowLike = {
+  font?: unknown;
+  alignment?: unknown;
+  eachCell: (callback: (cell: WorksheetCellLike) => void) => void;
+  getCell: (index: number) => WorksheetCellLike;
+};
+
+type WorkbookLike = {
+  creator: string;
+  lastModifiedBy: string;
+  created: Date;
+  modified: Date;
+  addWorksheet: (name: string) => WorksheetLike;
+  xlsx: {
+    writeBuffer: () => Promise<ExportWorkbookBuffer>;
+  };
+};
+
 export async function exportDashboardWorkbook(
   context: ExportContext,
   sections: ExportWorkbookSection[]
 ) {
   const { Workbook } = await import("exceljs");
-  const workbook = new Workbook();
+  const workbook = new Workbook() as WorkbookLike;
   workbook.creator = EXPORT_CREATOR;
   workbook.lastModifiedBy = context.requestedBy?.trim() || EXPORT_CREATOR;
   workbook.created = context.generatedAt;
@@ -63,7 +106,7 @@ export async function exportDashboardWorkbook(
 }
 
 function addInfoSheet(
-  workbook: Workbook,
+  workbook: WorkbookLike,
   context: ExportContext,
   usedSheetNames: Set<string>
 ) {
@@ -121,7 +164,7 @@ function addInfoSheet(
 }
 
 function addSectionSheet(
-  workbook: Workbook,
+  workbook: WorkbookLike,
   section: ExportWorkbookSection,
   usedSheetNames: Set<string>,
   usedTableNames: Set<string>
@@ -172,7 +215,7 @@ function addSectionSheet(
   noteRow.getCell(1).alignment = { vertical: "top", wrapText: true };
 }
 
-function styleInfoHeaderRow(row: Worksheet["lastRow"]) {
+function styleInfoHeaderRow(row: WorksheetRowLike | undefined) {
   if (!row) return;
   row.font = { bold: true };
   row.alignment = { vertical: "middle" };
@@ -185,7 +228,7 @@ function styleInfoHeaderRow(row: Worksheet["lastRow"]) {
   });
 }
 
-function styleSectionHeaderRow(row: Worksheet["lastRow"]) {
+function styleSectionHeaderRow(row: WorksheetRowLike | undefined) {
   if (!row) return;
   row.font = { bold: true, color: { argb: "FF0F172A" } };
   row.alignment = { vertical: "middle" };
@@ -205,7 +248,7 @@ function styleSectionHeaderRow(row: Worksheet["lastRow"]) {
 }
 
 function styleSectionCells(
-  worksheet: Worksheet,
+  worksheet: WorksheetLike,
   rowCount: number,
   columnCount: number
 ) {
@@ -338,8 +381,12 @@ function formatFileTimestamp(value: Date) {
   return `${year}${month}${day}-${hours}${minutes}`;
 }
 
-function downloadWorkbook(buffer: Awaited<ReturnType<Workbook["xlsx"]["writeBuffer"]>>, fileName: string) {
-  const blob = new Blob([buffer], { type: XLSX_MIME });
+function downloadWorkbook(buffer: ExportWorkbookBuffer, fileName: string) {
+  const blobPart =
+    buffer instanceof Uint8Array
+      ? buffer.slice().buffer
+      : buffer;
+  const blob = new Blob([blobPart], { type: XLSX_MIME });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
