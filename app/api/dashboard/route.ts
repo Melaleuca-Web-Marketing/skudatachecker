@@ -256,6 +256,16 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
   return res.json() as Promise<ApiSkuItem[]>;
 }
 
+function dedupeKitDetails(rows: ApiKitDetailsRow[]): ApiKitDetailsRow[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const key = `${r.country}|${r.parentSku}|${r.childSku}|${r.sortOrder}|${r.startDate}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
   target.descriptions.push(...source.descriptions);
   target.details.push(...source.details);
@@ -264,6 +274,7 @@ function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
   target.pricing.push(...source.pricing);
   target.productPoints.push(...source.productPoints);
   target.kitDetails.push(...source.kitDetails);
+  target.kitDetails = dedupeKitDetails(target.kitDetails);
   target.productBusinessRules.push(...source.productBusinessRules);
   target.productBayLocation.push(...source.productBayLocation);
   target.productDimension.push(...source.productDimension);

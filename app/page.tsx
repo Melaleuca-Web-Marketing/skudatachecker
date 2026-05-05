@@ -172,10 +172,22 @@ type ColumnDescriptor<K extends SectionKey> = {
   render: (row: SectionRowMap[K][number]) => ReactNode;
   /** Optional raw value for sorting — use this for dates, numbers, etc. Falls back to rendered text. */
   sortValue?: (row: SectionRowMap[K][number]) => string | number;
+  /** Declares which filter UI to show on this column. */
+  filterType?: FilterKind;
+  /** Raw value used for filter matching. Falls back to rendered text when omitted. */
+  filterValue?: (row: SectionRowMap[K][number]) => string | number;
 };
 
 type SortEntry = { colIndex: number; dir: "asc" | "desc" };
 type SectionSortState = Record<string, SortEntry[]>;
+
+type FilterKind = "text" | "date-range" | "set" | "number-range";
+type ColumnFilter =
+  | { kind: "text"; value: string }
+  | { kind: "date-range"; from: string; to: string }
+  | { kind: "set"; values: Set<string> }
+  | { kind: "number-range"; min: string; max: string };
+type SectionFilterState = Record<string, Record<number, ColumnFilter>>;
 
 type SectionConfig<K extends SectionKey> = {
   key: K;
@@ -381,11 +393,11 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Language", render: (row) => row.language },
-      { header: "Product Name", initialWidth: 260, className: "truncate", render: (row) => <span title={row.productName} className="block truncate">{row.productName}</span> },
-      { header: "Short Description", initialWidth: 240, className: "truncate", render: (row) => <span title={row.shortDescription} className="block truncate">{row.shortDescription}</span> },
-      { header: "Long Description", initialWidth: 280, className: "truncate", render: (row) => <span title={row.longDescription} className="block truncate">{row.longDescription}</span> },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Language", filterType: "set", render: (row) => row.language },
+      { header: "Product Name", filterType: "text", initialWidth: 260, className: "truncate", render: (row) => <span title={row.productName} className="block truncate">{row.productName}</span> },
+      { header: "Short Description", filterType: "text", initialWidth: 240, className: "truncate", render: (row) => <span title={row.shortDescription} className="block truncate">{row.shortDescription}</span> },
+      { header: "Long Description", filterType: "text", initialWidth: 280, className: "truncate", render: (row) => <span title={row.longDescription} className="block truncate">{row.longDescription}</span> },
     ],
   },
   details: {
@@ -407,17 +419,17 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => formatText(row.country) },
-      { header: "Kit Type", render: (row) => formatText(row.kitType) },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
-      { header: "Standard Weight", render: (row) => row.standardWeight ?? "--", sortValue: (row) => row.standardWeight ?? 0 },
-      { header: "Freightable", render: (row) => formatBoolean(row.freightable) },
-      { header: "Shippable", render: (row) => formatBoolean(row.shippable) },
-      { header: "Commissionable", render: (row) => formatBoolean(row.commissionable) },
-      { header: "Member Only", render: (row) => formatBoolean(row.memberOnly) },
-      { header: "CoO", initialWidth: 80, render: (row) => formatText(row.coo) },
-      { header: "Tariff Code", initialWidth: 160, className: "truncate", render: (row) => { const v = formatText(row.tariffCode); return v === "--" ? "--" : <span title={v} className="block truncate">{v}</span>; } },
+      { header: "Country", filterType: "set", render: (row) => formatText(row.country) },
+      { header: "Kit Type", filterType: "set", render: (row) => formatText(row.kitType) },
+      { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
+      { header: "Standard Weight", filterType: "number-range", filterValue: (row) => row.standardWeight ?? 0, render: (row) => row.standardWeight ?? "--", sortValue: (row) => row.standardWeight ?? 0 },
+      { header: "Freightable", filterType: "set", render: (row) => formatBoolean(row.freightable) },
+      { header: "Shippable", filterType: "set", render: (row) => formatBoolean(row.shippable) },
+      { header: "Commissionable", filterType: "set", render: (row) => formatBoolean(row.commissionable) },
+      { header: "Member Only", filterType: "set", render: (row) => formatBoolean(row.memberOnly) },
+      { header: "CoO", filterType: "set", initialWidth: 80, render: (row) => formatText(row.coo) },
+      { header: "Tariff Code", filterType: "text", initialWidth: 160, className: "truncate", render: (row) => { const v = formatText(row.tariffCode); return v === "--" ? "--" : <span title={v} className="block truncate">{v}</span>; } },
     ],
   },
   ingredients: {
@@ -439,15 +451,15 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Culture", render: (row) => row.culture },
-      { header: "Product Name", render: (row) => row.productName },
-      { header: "Ingredient Name", render: (row) => row.ingredientName },
-      { header: "Short Description", className: "max-w-xs", render: (row) => row.shortDescription },
-      { header: "All Sort", className: "text-right font-mono", render: (row) => row.allSort },
-      { header: "Key Sort", className: "text-right font-mono", render: (row) => row.keySort },
-      { header: "Modal CTA Text", render: (row) => row.modalCtaText },
-      { header: "Modal CTA Link", className: "max-w-xs", render: (row) => row.modalCtaLink },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Culture", filterType: "set", render: (row) => row.culture },
+      { header: "Product Name", filterType: "text", render: (row) => row.productName },
+      { header: "Ingredient Name", filterType: "text", render: (row) => row.ingredientName },
+      { header: "Short Description", filterType: "text", className: "max-w-xs", render: (row) => row.shortDescription },
+      { header: "All Sort", filterType: "number-range", filterValue: (row) => row.allSort, className: "text-right font-mono", render: (row) => row.allSort },
+      { header: "Key Sort", filterType: "number-range", filterValue: (row) => row.keySort, className: "text-right font-mono", render: (row) => row.keySort },
+      { header: "Modal CTA Text", filterType: "text", render: (row) => row.modalCtaText },
+      { header: "Modal CTA Link", filterType: "text", className: "max-w-xs", render: (row) => row.modalCtaLink },
     ],
   },
   channelAvailability: {
@@ -469,12 +481,12 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Warehouse", initialWidth: 220, className: "truncate", render: (row) => <span title={row.warehouse} className="block truncate">{row.warehouse}</span> },
-      { header: "Sales Channel", render: (row) => row.salesChannel },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
-      { header: "Available", render: (row) => formatBoolean(row.available) },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Warehouse", filterType: "set", initialWidth: 220, className: "truncate", render: (row) => <span title={row.warehouse} className="block truncate">{row.warehouse}</span> },
+      { header: "Sales Channel", filterType: "set", render: (row) => row.salesChannel },
+      { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
+      { header: "Available", filterType: "set", render: (row) => formatBoolean(row.available) },
     ],
   },
   pricing: {
@@ -496,11 +508,11 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Price Type", render: (row) => row.priceType },
-      { header: "Price", className: "text-right font-mono", render: (row) => currencyFormatter.format(row.price), sortValue: (row) => row.price },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Price Type", filterType: "set", render: (row) => row.priceType },
+      { header: "Price", filterType: "number-range", filterValue: (row) => row.price, className: "text-right font-mono", render: (row) => currencyFormatter.format(row.price), sortValue: (row) => row.price },
+      { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
     ],
   },
   productPoints: {
@@ -522,11 +534,11 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Product Points Type", render: (row) => row.productPointsType },
-      { header: "Value", className: "text-right font-mono", render: (row) => row.value, sortValue: (row) => row.value },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Product Points Type", filterType: "set", render: (row) => row.productPointsType },
+      { header: "Value", filterType: "number-range", filterValue: (row) => row.value, className: "text-right font-mono", render: (row) => row.value, sortValue: (row) => row.value },
+      { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
     ],
   },
   kitDetails: {
@@ -548,16 +560,16 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", initialWidth: 100, render: (row) => row.country },
-      { header: "Quantity", initialWidth: 75, className: "text-right font-mono", render: (row) => row.quantity, sortValue: (row) => row.quantity },
-      { header: "Sort Order", initialWidth: 85, className: "text-right font-mono", render: (row) => row.sortOrder, sortValue: (row) => row.sortOrder },
-      { header: "New Sort Order", initialWidth: 100, className: "text-right font-mono", render: (row) => row.newSortOrder, sortValue: (row) => row.newSortOrder },
-      { header: "Parent SKU", initialWidth: 100, render: (row) => row.parentSku },
-      { header: "Child SKU", initialWidth: 100, render: (row) => row.childSku },
-      { header: "Child SKU Description", initialWidth: 280, className: "truncate", render: (row) => <span title={row.childSkuDescription} className="block truncate">{row.childSkuDescription}</span> },
-      { header: "Select Type", initialWidth: 105, render: (row) => row.selectType },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
+      { header: "Country", filterType: "set", initialWidth: 100, render: (row) => row.country },
+      { header: "Quantity", filterType: "number-range", filterValue: (row) => row.quantity, initialWidth: 75, className: "text-right font-mono", render: (row) => row.quantity, sortValue: (row) => row.quantity },
+      { header: "Sort Order", filterType: "number-range", filterValue: (row) => row.sortOrder, initialWidth: 85, className: "text-right font-mono", render: (row) => row.sortOrder, sortValue: (row) => row.sortOrder },
+      { header: "New Sort Order", filterType: "number-range", filterValue: (row) => row.newSortOrder, initialWidth: 100, className: "text-right font-mono", render: (row) => row.newSortOrder, sortValue: (row) => row.newSortOrder },
+      { header: "Parent SKU", filterType: "text", initialWidth: 100, render: (row) => row.parentSku },
+      { header: "Child SKU", filterType: "text", initialWidth: 100, render: (row) => row.childSku },
+      { header: "Child SKU Description", filterType: "text", initialWidth: 280, className: "truncate", render: (row) => <span title={row.childSkuDescription} className="block truncate">{row.childSkuDescription}</span> },
+      { header: "Select Type", filterType: "set", initialWidth: 105, render: (row) => row.selectType },
+      { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
+      { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
     ],
   },
   businessRules: {
@@ -579,19 +591,19 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Business Rule", render: (row) => row.businessRule },
-      { header: "Start Date", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
-      { header: "End Date", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
-      { header: "Item Unit Qty", className: "text-right font-mono", render: (row) => row.itemUnitQty },
-      { header: "Max Qty", className: "text-right font-mono", render: (row) => row.maxQty },
-      { header: "Bundle Max Weight", className: "text-right font-mono", render: (row) => row.bundleMaxWeight },
-      { header: "Product Category Iden", render: (row) => row.productCategoryIden },
-      { header: "Ship To Country", render: (row) => row.shipToCountry },
-      { header: "Ship To Country Iden", render: (row) => row.shipToCountryIden },
-      { header: "Rule SKU", render: (row) => row.ruleSku },
-      { header: "Notification Localization Key", className: "max-w-xs", render: (row) => row.notificationLocalizationKey },
-      { header: "General Supporting Data", className: "max-w-xs", render: (row) => row.generalSupportingData },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Business Rule", filterType: "text", render: (row) => row.businessRule },
+      { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate) },
+      { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate) },
+      { header: "Item Unit Qty", filterType: "number-range", filterValue: (row) => row.itemUnitQty, className: "text-right font-mono", render: (row) => row.itemUnitQty },
+      { header: "Max Qty", filterType: "number-range", filterValue: (row) => row.maxQty, className: "text-right font-mono", render: (row) => row.maxQty },
+      { header: "Bundle Max Weight", filterType: "number-range", filterValue: (row) => row.bundleMaxWeight, className: "text-right font-mono", render: (row) => row.bundleMaxWeight },
+      { header: "Product Category Iden", filterType: "text", render: (row) => row.productCategoryIden },
+      { header: "Ship To Country", filterType: "set", render: (row) => row.shipToCountry },
+      { header: "Ship To Country Iden", filterType: "text", render: (row) => row.shipToCountryIden },
+      { header: "Rule SKU", filterType: "text", render: (row) => row.ruleSku },
+      { header: "Notification Localization Key", filterType: "text", className: "max-w-xs", render: (row) => row.notificationLocalizationKey },
+      { header: "General Supporting Data", filterType: "text", className: "max-w-xs", render: (row) => row.generalSupportingData },
     ],
   },
   productBayLocation: {
@@ -613,9 +625,9 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Warehouse", render: (row) => row.warehouse },
-      { header: "Bay Location", render: (row) => row.bayLocation },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Warehouse", filterType: "set", render: (row) => row.warehouse },
+      { header: "Bay Location", filterType: "text", render: (row) => row.bayLocation },
     ],
   },
   productDimension: {
@@ -637,11 +649,11 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Unit", render: (row) => row.unit },
-      { header: "Height", className: "text-right font-mono", render: (row) => row.height },
-      { header: "Width", className: "text-right font-mono", render: (row) => row.width },
-      { header: "Depth", className: "text-right font-mono", render: (row) => row.depth },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Unit", filterType: "set", render: (row) => row.unit },
+      { header: "Height", filterType: "number-range", filterValue: (row) => row.height, className: "text-right font-mono", render: (row) => row.height },
+      { header: "Width", filterType: "number-range", filterValue: (row) => row.width, className: "text-right font-mono", render: (row) => row.width },
+      { header: "Depth", filterType: "number-range", filterValue: (row) => row.depth, className: "text-right font-mono", render: (row) => row.depth },
     ],
   },
   productWeight: {
@@ -663,9 +675,9 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Weight Amount", className: "text-right font-mono", render: (row) => row.weightAmount },
-      { header: "Weight Unit", render: (row) => row.weightUnit },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Weight Amount", filterType: "number-range", filterValue: (row) => row.weightAmount, className: "text-right font-mono", render: (row) => row.weightAmount },
+      { header: "Weight Unit", filterType: "set", render: (row) => row.weightUnit },
     ],
   },
   skuCounters: {
@@ -687,11 +699,11 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "Warehouse", render: (row) => row.warehouse },
-      { header: "On Hand", className: "text-right font-mono", render: (row) => row.onHand.toLocaleString() },
-      { header: "Pending", className: "text-right font-mono", render: (row) => row.pending.toLocaleString() },
-      { header: "Available", className: "text-right font-mono", render: (row) => row.available.toLocaleString() },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "Warehouse", filterType: "set", render: (row) => row.warehouse },
+      { header: "On Hand", filterType: "number-range", filterValue: (row) => row.onHand, className: "text-right font-mono", render: (row) => row.onHand.toLocaleString() },
+      { header: "Pending", filterType: "number-range", filterValue: (row) => row.pending, className: "text-right font-mono", render: (row) => row.pending.toLocaleString() },
+      { header: "Available", filterType: "number-range", filterValue: (row) => row.available, className: "text-right font-mono", render: (row) => row.available.toLocaleString() },
     ],
   },
   customsDetails: {
@@ -713,9 +725,9 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       );
     },
     columns: [
-      { header: "Country", render: (row) => row.country },
-      { header: "EU Tariff Code", render: (row) => row.euTariffCode },
-      { header: "07 Standard Cost [EUR]", className: "text-right font-mono", render: (row) => row.standardCostEur != null ? currencyFormatter.format(row.standardCostEur) : "--" },
+      { header: "Country", filterType: "set", render: (row) => row.country },
+      { header: "EU Tariff Code", filterType: "text", render: (row) => row.euTariffCode },
+      { header: "07 Standard Cost [EUR]", filterType: "number-range", filterValue: (row) => row.standardCostEur ?? 0, className: "text-right font-mono", render: (row) => row.standardCostEur != null ? currencyFormatter.format(row.standardCostEur) : "--" },
     ],
   },
 };
@@ -1307,6 +1319,175 @@ export default function Page() {
   );
 }
 
+// ── Filter helpers ─────────────────────────────────────────────────────────────
+
+function matchesFilter(filter: ColumnFilter, rawVal: string | number): boolean {
+  const str = String(rawVal ?? "");
+  switch (filter.kind) {
+    case "text":
+      return !filter.value || str.toLowerCase().includes(filter.value.toLowerCase());
+    case "date-range":
+      if (!str) return true;
+      if (filter.from && str < filter.from) return false;
+      if (filter.to && str > filter.to) return false;
+      return true;
+    case "set":
+      return filter.values.has(str);
+    case "number-range": {
+      const num = Number(rawVal);
+      if (filter.min !== "" && !Number.isNaN(Number(filter.min)) && num < Number(filter.min)) return false;
+      if (filter.max !== "" && !Number.isNaN(Number(filter.max)) && num > Number(filter.max)) return false;
+      return true;
+    }
+  }
+}
+
+type FilterPopoverProps = {
+  filterType: FilterKind;
+  currentFilter: ColumnFilter | undefined;
+  distinctValues?: string[];
+  isDark: boolean;
+  onFilterChange: (filter: ColumnFilter | null) => void;
+  popoverRef: React.RefObject<HTMLDivElement | null>;
+};
+
+function FilterPopover({ filterType, currentFilter, distinctValues, isDark, onFilterChange, popoverRef }: FilterPopoverProps) {
+  const bg = isDark
+    ? "bg-slate-800 border-slate-700 text-slate-100 shadow-slate-950/60"
+    : "bg-white border-slate-200 text-slate-900 shadow-slate-900/15";
+  const inputClass = isDark
+    ? "w-full rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+    : "w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400";
+  const clearBtn = "mt-2 block text-[10px] text-rose-400 hover:text-rose-300 transition-colors";
+
+  const base = `rounded-xl border p-3 shadow-xl ${bg}`;
+
+  if (filterType === "text") {
+    const value = currentFilter?.kind === "text" ? currentFilter.value : "";
+    return (
+      <div ref={popoverRef} className={`${base} w-48`} onClick={(e) => e.stopPropagation()}>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider opacity-50">Contains</p>
+        <input
+          className={inputClass}
+          placeholder="Filter text…"
+          value={value}
+          autoFocus
+          onChange={(e) => onFilterChange(e.target.value ? { kind: "text", value: e.target.value } : null)}
+        />
+        {value && <button className={clearBtn} onClick={() => onFilterChange(null)}>Clear filter</button>}
+      </div>
+    );
+  }
+
+  if (filterType === "date-range") {
+    const from = currentFilter?.kind === "date-range" ? currentFilter.from : "";
+    const to   = currentFilter?.kind === "date-range" ? currentFilter.to   : "";
+    const update = (newFrom: string, newTo: string) =>
+      onFilterChange(newFrom || newTo ? { kind: "date-range", from: newFrom, to: newTo } : null);
+    return (
+      <div ref={popoverRef} className={`${base} w-52`} onClick={(e) => e.stopPropagation()}>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider opacity-50">Date range</p>
+        <div className="space-y-2">
+          <div>
+            <label className="mb-0.5 block text-[10px] opacity-60">On or after</label>
+            <input type="date" className={inputClass} value={from} onChange={(e) => update(e.target.value, to)} />
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[10px] opacity-60">On or before</label>
+            <input type="date" className={inputClass} value={to}   onChange={(e) => update(from, e.target.value)} />
+          </div>
+        </div>
+        {(from || to) && <button className={clearBtn} onClick={() => onFilterChange(null)}>Clear filter</button>}
+      </div>
+    );
+  }
+
+  if (filterType === "set") {
+    // null active = no filter (all shown); empty Set = explicit deselect all (none shown)
+    const active = currentFilter?.kind === "set" ? currentFilter.values : null;
+    const vals = distinctValues ?? [];
+    const allChecked = active === null;
+    const noneChecked = active !== null && active.size === 0;
+    const partialChecked = active !== null && active.size > 0;
+    const indeterminate = partialChecked && active.size < vals.length;
+
+    const handleSelectAll = () => {
+      if (noneChecked) {
+        onFilterChange(null); // none → all
+      } else {
+        onFilterChange({ kind: "set", values: new Set() }); // all or partial → none
+      }
+    };
+
+    const toggle = (val: string) => {
+      if (active === null) {
+        // all were on — deselect just this one
+        const next = new Set(vals.filter((v) => v !== val));
+        onFilterChange(next.size === 0 ? { kind: "set", values: new Set() } : { kind: "set", values: next });
+      } else {
+        const next = new Set(active);
+        next.has(val) ? next.delete(val) : next.add(val);
+        // if all values are now checked, remove the filter entirely
+        onFilterChange(next.size === vals.length ? null : { kind: "set", values: next });
+      }
+    };
+
+    const rowClass = `flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 ${isDark ? "hover:bg-white/10" : "hover:bg-black/5"}`;
+    return (
+      <div ref={popoverRef} className={`${base} min-w-[160px] max-w-[260px]`} onClick={(e) => e.stopPropagation()}>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider opacity-50">Filter by value</p>
+        <div className="max-h-52 overflow-y-auto space-y-0.5">
+          <label className={rowClass}>
+            <input
+              type="checkbox"
+              checked={allChecked}
+              ref={(el) => { if (el) el.indeterminate = indeterminate; }}
+              onChange={handleSelectAll}
+            />
+            <span className="text-xs font-semibold">{noneChecked ? "(Select all)" : "(Deselect all)"}</span>
+          </label>
+          {vals.map((val) => (
+            <label key={val} className={rowClass}>
+              <input
+                type="checkbox"
+                checked={active === null || active.has(val)}
+                onChange={() => toggle(val)}
+              />
+              <span className="truncate text-xs">{val || "(blank)"}</span>
+            </label>
+          ))}
+        </div>
+        {!allChecked && <button className={clearBtn} onClick={() => onFilterChange(null)}>Clear filter</button>}
+      </div>
+    );
+  }
+
+  if (filterType === "number-range") {
+    const min = currentFilter?.kind === "number-range" ? currentFilter.min : "";
+    const max = currentFilter?.kind === "number-range" ? currentFilter.max : "";
+    const update = (newMin: string, newMax: string) =>
+      onFilterChange(newMin || newMax ? { kind: "number-range", min: newMin, max: newMax } : null);
+    return (
+      <div ref={popoverRef} className={`${base} w-44`} onClick={(e) => e.stopPropagation()}>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider opacity-50">Number range</p>
+        <div className="space-y-2">
+          <div>
+            <label className="mb-0.5 block text-[10px] opacity-60">Min</label>
+            <input type="number" className={inputClass} placeholder="Min…" value={min} onChange={(e) => update(e.target.value, max)} />
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[10px] opacity-60">Max</label>
+            <input type="number" className={inputClass} placeholder="Max…" value={max} onChange={(e) => update(min, e.target.value)} />
+          </div>
+        </div>
+        {(min || max) && <button className={clearBtn} onClick={() => onFilterChange(null)}>Clear filter</button>}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function CombinedSectionsTable({
   sections,
   rows,
@@ -1325,6 +1506,52 @@ function CombinedSectionsTable({
   const [headerHeights, setHeaderHeights] = useState({ section: 44, column: 44 });
   const [resizing, setResizing] = useState<{ colId: string; startX: number; startWidth: number } | null>(null);
   const [sortState, setSortState] = useState<SectionSortState>({});
+  const [filterState, setFilterState] = useState<SectionFilterState>({});
+  const [openFilterColId, setOpenFilterColId] = useState<string | null>(null);
+  const [filterButtonRect, setFilterButtonRect] = useState<DOMRect | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  const distinctValuesByCol = useMemo(() => {
+    const result: Record<string, Record<number, string[]>> = {};
+    for (const row of rows) {
+      for (const section of sections) {
+        const data = (row as Record<string, unknown>)[section.key];
+        if (!Array.isArray(data)) continue;
+        for (const item of data) {
+          section.columns.forEach((col, colIdx) => {
+            if (col.filterType !== "set") return;
+            const val = col.filterValue
+              ? String(col.filterValue(item as never))
+              : getTextFromReactNode(col.render(item as never));
+            if (!result[section.key]) result[section.key] = {};
+            if (!result[section.key][colIdx]) result[section.key][colIdx] = [];
+            if (!result[section.key][colIdx].includes(val)) result[section.key][colIdx].push(val);
+          });
+        }
+      }
+    }
+    return result;
+  }, [rows, sections]);
+
+  useEffect(() => {
+    if (!openFilterColId) return;
+    const handleClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpenFilterColId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [openFilterColId]);
+
+  function setColumnFilter(sectionKey: string, colIndex: number, filter: ColumnFilter | null) {
+    setFilterState((prev) => {
+      const section = { ...(prev[sectionKey] ?? {}) };
+      if (filter === null) delete section[colIndex];
+      else section[colIndex] = filter;
+      return { ...prev, [sectionKey]: section };
+    });
+  }
 
   function handleColumnSort(sectionKey: SectionKey, colIndex: number, shiftKey: boolean) {
     setSortState((prev) => {
@@ -1633,6 +1860,19 @@ function CombinedSectionsTable({
               Reset Sort
             </button>
           )}
+          {Object.values(filterState).some((s) => Object.keys(s).length > 0) && (
+            <button
+              type="button"
+              onClick={() => { setFilterState({}); setOpenFilterColId(null); setFilterButtonRect(null); }}
+              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                isDark
+                  ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-100 hover:border-indigo-400 hover:text-indigo-50"
+                  : "border-indigo-200 bg-indigo-50 text-indigo-800 hover:border-indigo-300 hover:text-indigo-900"
+              }`}
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -1740,6 +1980,7 @@ function CombinedSectionsTable({
                       const sectionSort = sortState[section.key] ?? [];
                       const sortEntry = sectionSort.find((e) => e.colIndex === columnIndex);
                       const sortPriority = sectionSort.findIndex((e) => e.colIndex === columnIndex);
+                      const isFiltered = !!(filterState[section.key] ?? {})[columnIndex];
                       return (
                         <th
                           key={`header-${section.key}-${column.header}`}
@@ -1770,23 +2011,49 @@ function CombinedSectionsTable({
                           />
                           <span
                             onDoubleClick={() => autoFitColumn(colId)}
-                            className={`inline-flex w-full items-center justify-between gap-1 text-left font-semibold ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                            className={`inline-flex w-full items-center gap-1 text-left font-semibold ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
                               expanded ? "opacity-100" : "opacity-0"
                             }`}
                           >
-                            <span className="truncate">{column.header}</span>
-                            {sortEntry && (
-                              <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold">
-                                {sectionSort.length > 1 && (
-                                  <span className={`rounded-full px-1 py-px ${isDark ? "bg-white/20" : "bg-black/10"}`}>
-                                    {sortPriority + 1}
-                                  </span>
-                                )}
-                                {sortEntry.dir === "asc" ? "↑" : "↓"}
-                              </span>
-                            )}
-                            {!sortEntry && expanded && (
-                              <span className="flex-shrink-0 text-[10px] opacity-25 transition-opacity duration-150 group-hover:opacity-70">↕</span>
+                            <span className="flex-1 inline-flex min-w-0 items-center gap-1 truncate">
+                              <span className="truncate">{column.header}</span>
+                              {sortEntry && (
+                                <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold">
+                                  {sectionSort.length > 1 && (
+                                    <span className={`rounded-full px-1 py-px ${isDark ? "bg-white/20" : "bg-black/10"}`}>
+                                      {sortPriority + 1}
+                                    </span>
+                                  )}
+                                  {sortEntry.dir === "asc" ? "↑" : "↓"}
+                                </span>
+                              )}
+                              {!sortEntry && expanded && (
+                                <span className="flex-shrink-0 text-[10px] opacity-25 transition-opacity duration-150 group-hover:opacity-70">↕</span>
+                              )}
+                            </span>
+                            {column.filterType && expanded && (
+                              <button
+                                title="Filter column"
+                                className={`flex-shrink-0 rounded p-0.5 transition-opacity ${
+                                  isFiltered
+                                    ? "opacity-100 text-indigo-300"
+                                    : "opacity-35 hover:opacity-100"
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (openFilterColId === colId) {
+                                    setOpenFilterColId(null);
+                                    setFilterButtonRect(null);
+                                  } else {
+                                    setOpenFilterColId(colId);
+                                    setFilterButtonRect((e.currentTarget as HTMLElement).getBoundingClientRect());
+                                  }
+                                }}
+                              >
+                                <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                                  <path d="M1 1.5h10l-4 4.5V11L5 10V6L1 1.5z" />
+                                </svg>
+                              </button>
                             )}
                           </span>
                         </th>
@@ -1827,10 +2094,21 @@ function CombinedSectionsTable({
                       ? ((failingState?.failingItems.size ?? 0) + (failingState?.hasEmptyFailure ? 1 : 0))
                       : 0;
 
-                    // Apply multi-column sort to this section's data
+                    // Apply column filters then multi-column sort to this section's data
                     const sectionSort = sortState[section.key] ?? [];
                     const rawArr = Array.isArray(data) ? (data as unknown[]) : [];
-                    const sortedArr = sectionSort.length === 0 ? rawArr : [...rawArr].sort((a, b) => {
+                    const activeFilters = filterState[section.key] ?? {};
+                    const filteredArr = Object.keys(activeFilters).length === 0 ? rawArr : rawArr.filter((item) =>
+                      Object.entries(activeFilters).every(([colIdxStr, filter]) => {
+                        const col = section.columns[Number(colIdxStr)] as ColumnDescriptor<typeof section.key> | undefined;
+                        if (!col) return true;
+                        const rawVal = col.filterValue
+                          ? col.filterValue(item as never)
+                          : getTextFromReactNode(col.render(item as never));
+                        return matchesFilter(filter, rawVal);
+                      })
+                    );
+                    const sortedArr = sectionSort.length === 0 ? filteredArr : [...filteredArr].sort((a, b) => {
                       for (const { colIndex, dir } of sectionSort) {
                         const col = section.columns[colIndex] as ColumnDescriptor<typeof section.key>;
                         const aVal = col.sortValue
@@ -2004,6 +2282,35 @@ function CombinedSectionsTable({
           </tbody>
         </table>
       </div>
+
+      {/* Fixed-position filter popover — rendered outside the overflow scroll container */}
+      {openFilterColId && filterButtonRect && (() => {
+        const lastDash = openFilterColId.lastIndexOf("-");
+        const sectionKey = openFilterColId.slice(0, lastDash);
+        const colIdx = Number(openFilterColId.slice(lastDash + 1));
+        const section = sections.find((s) => s.key === sectionKey);
+        const col = section?.columns[colIdx];
+        if (!section || !col || !col.filterType) return null;
+        return (
+          <div
+            style={{
+              position: "fixed",
+              top: filterButtonRect.bottom + 4,
+              left: Math.min(filterButtonRect.left, window.innerWidth - 300),
+              zIndex: 9999,
+            }}
+          >
+            <FilterPopover
+              filterType={col.filterType}
+              currentFilter={(filterState[sectionKey] ?? {})[colIdx]}
+              distinctValues={distinctValuesByCol[sectionKey]?.[colIdx]}
+              isDark={isDark}
+              onFilterChange={(f) => setColumnFilter(sectionKey, colIdx, f)}
+              popoverRef={popoverRef}
+            />
+          </div>
+        );
+      })()}
     </section>
   );
 }
