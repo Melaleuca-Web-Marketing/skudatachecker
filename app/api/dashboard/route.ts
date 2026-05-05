@@ -203,7 +203,7 @@ class AllCountriesFailedError extends Error {
 }
 
 const SOFTWARE_SYSTEM_COUNTRIES: Record<SoftwareSystem, readonly string[]> = {
-  NorthAmerica: ["UnitedStates", "Canada", "Mexico", "MelaVanilla"],
+  NorthAmerica: ["UnitedStates", "Canada", "Mexico"],
   Taiwan: ["Taiwan"],
   Japan: ["Japan"],
   Australia: ["Australia", "NewZealand"],

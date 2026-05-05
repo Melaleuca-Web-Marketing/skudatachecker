@@ -238,7 +238,7 @@ const SOFTWARE_SYSTEMS = [
 type SoftwareSystem = (typeof SOFTWARE_SYSTEMS)[number];
 
 const SYSTEM_COUNTRIES: Record<SoftwareSystem, string[]> = {
-  NorthAmerica: ["UnitedStates", "Canada", "Mexico", "MelaVanilla"],
+  NorthAmerica: ["UnitedStates", "Canada", "Mexico"],
   Taiwan: ["Taiwan"],
   Japan: ["Japan"],
   Australia: ["Australia", "NewZealand"],
