@@ -5,6 +5,7 @@ import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useRef, useState } 
 import {
   exportDashboardWorkbook,
   type ExportCellValue,
+  type ExportColumn,
   type ExportContext,
   type ExportWarning,
   type ExportWorkbookSection,
@@ -2549,41 +2550,48 @@ function buildExportSections(
   rows: DashboardRow[],
   sections: AnySectionConfig[]
 ): ExportWorkbookSection[] {
+  // Build SKU → English product name lookup for use across all sheets
+  const productNames = new Map<string, string>();
+  rows.forEach((row) => {
+    const englishDesc = row.description.find((d) => d.language === "English");
+    if (englishDesc?.productName) productNames.set(row.sku, englishDesc.productName);
+  });
+
   return sections.map((section) => {
-    const sectionColumns =
-      section.key === "skuInfo"
-        ? section.columns.map((column) => ({
-            header: column.header,
-            width: toExcelColumnWidth(column),
-          }))
-        : [
-            { header: "SKU", width: 16 },
-            ...section.columns.map((column) => ({
-              header: column.header,
-              width: toExcelColumnWidth(column),
-            })),
-          ];
+    const isSkuInfo = section.key === "skuInfo";
+    const isDescription = section.key === "description";
+    const addProductName = !isDescription;
+
+    const sectionDataColumns = section.columns.map((column) => ({
+      header: column.header,
+      width: toExcelColumnWidth(column),
+    }));
+
+    const sectionColumns: ExportColumn[] = isSkuInfo
+      ? [{ header: "SKU", width: 16 }, { header: "Product Name", width: 40 }]
+      : addProductName
+        ? [{ header: "SKU", width: 16 }, { header: "Product Name", width: 40 }, ...sectionDataColumns]
+        : [{ header: "SKU", width: 16 }, ...sectionDataColumns];
 
     const sectionRows: ExportCellValue[][] = [];
 
-    if (section.key === "skuInfo") {
+    if (isSkuInfo) {
       rows.forEach((row) => {
-        sectionRows.push([row.sku]);
+        sectionRows.push([row.sku, productNames.get(row.sku) ?? ""]);
       });
     } else {
       rows.forEach((row) => {
+        const productName = productNames.get(row.sku) ?? "";
         const sectionData = Array.isArray(row[section.key]) ? (row[section.key] as any[]) : [];
         sectionData.forEach((item) => {
-          sectionRows.push([
-            row.sku,
-            ...section.columns.map((column) => {
-              try {
-                return toExportCellValue(column.render(item as never));
-              } catch {
-                return "";
-              }
-            }),
-          ]);
+          const dataCells = section.columns.map((column) => {
+            try { return toExportCellValue(column.render(item as never)); } catch { return ""; }
+          });
+          sectionRows.push(
+            isDescription
+              ? [row.sku, ...dataCells]
+              : [row.sku, productName, ...dataCells]
+          );
         });
       });
     }
