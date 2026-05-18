@@ -203,6 +203,7 @@ type AnySectionConfig = SectionConfig<SectionKey>;
 
 type CombinedTableProps = {
   sections: AnySectionConfig[];
+  allSections: AnySectionConfig[];
   rows: DashboardRow[];
   expandedSections: Record<SectionKey, boolean>;
   onToggleSection: (key: SectionKey) => void;
@@ -212,16 +213,10 @@ type CombinedTableProps = {
   exporting: boolean;
   theme: Theme;
   validationDate: string;
-};
-
-type SectionVisibilityControlsProps = {
-  sections: AnySectionConfig[];
   visibility: Record<SectionKey, boolean>;
-  onToggle: (key: SectionKey) => void;
+  onToggleVisibility: (key: SectionKey) => void;
   onShowAll: () => void;
   onHideAll: () => void;
-  theme: Theme;
-  disabled?: boolean;
 };
 
 const SOFTWARE_SYSTEMS = [
@@ -747,7 +742,8 @@ export default function Page() {
   const [country, setCountry] = useState("");
   const [webOnly, setWebOnly] = useState(false);
   const [validationDate, setValidationDate] = useState<string>("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const prefsRef = useRef<HTMLDivElement>(null);
 
   const buildCollapsedState = () =>
     SECTION_ORDER.reduce(
@@ -869,6 +865,17 @@ export default function Page() {
     document.documentElement.setAttribute("data-theme", theme);
     window.localStorage.setItem("sku-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!prefsOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (prefsRef.current && !prefsRef.current.contains(e.target as Node)) {
+        setPrefsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [prefsOpen]);
 
   async function handleGenerate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1171,80 +1178,75 @@ export default function Page() {
             />
           </div>
 
-          {/* ── Filters (accordion) ── */}
-          <div className={`rounded-2xl border ${isDark ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50"}`}>
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((prev) => !prev)}
-              aria-expanded={filtersOpen}
-              className={`flex w-full items-center justify-between px-4 py-3 text-left ${isDark ? "text-slate-200 hover:text-white" : "text-slate-700 hover:text-slate-900"}`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-widest">Filters</span>
-                {(webOnly || validationDate) && (
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${isDark ? "bg-emerald-500/20 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}>
-                    Active
-                  </span>
-                )}
-              </span>
-              <svg
-                className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${filtersOpen ? "rotate-180" : "rotate-0"}`}
-                viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
-              >
-                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-              </svg>
-            </button>
-
-            {filtersOpen && (
-              <div className="grid grid-cols-1 gap-4 border-t px-4 pb-4 pt-3 sm:grid-cols-2" style={{ borderColor: isDark ? "rgb(51 65 85)" : "rgb(226 232 240)" }}>
-
-                {/* Validation Date */}
-                <div className="flex flex-col gap-1">
-                  <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
-                    Validation Date
-                    <span className={`ml-1.5 font-normal normal-case tracking-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>(optional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={validationDate}
-                    onChange={(e) => setValidationDate(e.target.value)}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                      isDark ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-300 bg-white text-slate-900"
-                    }`}
-                  />
-                </div>
-
-                {/* Web Channels Only */}
-                <div className="flex flex-col gap-1">
-                  <span className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
-                    Channel Filter
-                  </span>
-                  <label className={`inline-flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition hover:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400 ${
-                    isDark ? "border-slate-600 bg-slate-800" : "border-slate-300 bg-white"
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={webOnly}
-                      onChange={(e) => setWebOnly(e.target.checked)}
-                      className="h-4 w-4 accent-emerald-500"
-                    />
-                    <span className={isDark ? "text-slate-100" : "text-slate-800"}>Web channels only</span>
-                  </label>
-                </div>
-
-              </div>
-            )}
-          </div>
-
-          {/* ── Submit ── */}
+          {/* ── Submit + Preferences gear ── */}
           <div className="flex items-center justify-between gap-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 px-8 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Searching…" : "Search"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 px-8 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-900/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Searching…" : "Search"}
+              </button>
+
+              {/* Preferences popover */}
+              <div ref={prefsRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPrefsOpen((p) => !p)}
+                  aria-label="Preferences"
+                  className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition ${
+                    isDark
+                      ? "border-slate-700 bg-slate-800 text-slate-300 hover:border-indigo-400 hover:text-indigo-200"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
+                  }`}
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                  </svg>
+                  {(webOnly || validationDate) && (
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-400" />
+                  )}
+                </button>
+
+                {prefsOpen && (
+                  <div className={`absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border p-4 shadow-xl ${
+                    isDark ? "border-slate-700 bg-slate-800 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+                  }`}>
+                    <p className={`mb-3 text-xs font-semibold uppercase tracking-widest ${isDark ? "text-slate-400" : "text-slate-500"}`}>Preferences</p>
+                    <div className="space-y-4">
+                      {/* Validation Date */}
+                      <div className="flex flex-col gap-1">
+                        <label className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                          Validation Date
+                          <span className={`ml-1.5 font-normal normal-case tracking-normal ${isDark ? "text-slate-500" : "text-slate-400"}`}>(optional)</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={validationDate}
+                          onChange={(e) => setValidationDate(e.target.value)}
+                          className={`rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                            isDark ? "border-slate-600 bg-slate-900 text-slate-100" : "border-slate-300 bg-white text-slate-900"
+                          }`}
+                        />
+                      </div>
+                      {/* Web Channels Only */}
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-300" : "text-slate-500"}`}>Channel Filter</span>
+                        <label className={`inline-flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition hover:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400 ${
+                          isDark ? "border-slate-600 bg-slate-900" : "border-slate-300 bg-white"
+                        }`}>
+                          <input type="checkbox" checked={webOnly} onChange={(e) => setWebOnly(e.target.checked)} className="h-4 w-4 accent-emerald-500" />
+                          <span className={isDark ? "text-slate-100" : "text-slate-800"}>Web channels only</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {!lastGenerated && (
               <p className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>Enter SKUs above and press Search.</p>
             )}
@@ -1294,17 +1296,9 @@ export default function Page() {
           </p>
         )}
 
-        <SectionVisibilityToggles
-          sections={sectionList}
-          visibility={sectionVisibility}
-          onToggle={toggleSectionVisibility}
-          onShowAll={showAllSections}
-          onHideAll={hideAllSections}
-          theme={theme}
-        />
-
         <CombinedSectionsTable
           sections={visibleSections}
+          allSections={sectionList}
           rows={displayRows ?? []}
           expandedSections={expandedSections}
           onToggleSection={toggleSection}
@@ -1314,6 +1308,10 @@ export default function Page() {
           exporting={exporting}
           theme={theme}
           validationDate={validationDate}
+          visibility={sectionVisibility}
+          onToggleVisibility={toggleSectionVisibility}
+          onShowAll={showAllSections}
+          onHideAll={hideAllSections}
         />
       </div>
     </main>
@@ -1491,6 +1489,7 @@ function FilterPopover({ filterType, currentFilter, distinctValues, isDark, onFi
 
 function CombinedSectionsTable({
   sections,
+  allSections,
   rows,
   expandedSections,
   onToggleSection,
@@ -1500,12 +1499,22 @@ function CombinedSectionsTable({
   exporting,
   theme,
   validationDate,
+  visibility,
+  onToggleVisibility,
+  onShowAll,
+  onHideAll,
 }: CombinedTableProps) {
   const isDark = theme === "dark";
+  const [chipsOpen, setChipsOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem("sku-section-selection-open");
+    return stored === null ? true : stored === "true";
+  });
   const [tableStickyActive, setTableStickyActive] = useState(false);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [headerHeights, setHeaderHeights] = useState({ section: 44, column: 44 });
   const [resizing, setResizing] = useState<{ colId: string; startX: number; startWidth: number } | null>(null);
+  const [skuSortDir, setSkuSortDir] = useState<"asc" | "desc" | null>(null);
   const [sortState, setSortState] = useState<SectionSortState>({});
   const [filterState, setFilterState] = useState<SectionFilterState>({});
   const [openFilterColId, setOpenFilterColId] = useState<string | null>(null);
@@ -1584,6 +1593,26 @@ function CombinedSectionsTable({
       }
     });
   }
+  const sortedRows = useMemo(() => {
+    if (!skuSortDir) return rows;
+    return [...rows].sort((a, b) => {
+      const aVal = isNaN(Number(a.sku)) ? a.sku : Number(a.sku);
+      const bVal = isNaN(Number(b.sku)) ? b.sku : Number(b.sku);
+      if (aVal < bVal) return skuSortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return skuSortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [rows, skuSortDir]);
+
+  function jumpToSection(key: SectionKey) {
+    const th = document.getElementById(`section-col-${key}`);
+    const wrapper = tableWrapperRef.current;
+    if (!th || !wrapper) return;
+    const thRect = th.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    wrapper.scrollTo({ left: wrapper.scrollLeft + thRect.left - wrapperRect.left - SUMMARY_COLUMN_WIDTH, behavior: "smooth" });
+  }
+
   const tableWrapperRef = useRef<HTMLDivElement | null>(null);
   const sectionHeaderRowRef = useRef<HTMLTableRowElement | null>(null);
   const columnHeaderRowRef = useRef<HTMLTableRowElement | null>(null);
@@ -1789,93 +1818,139 @@ function CombinedSectionsTable({
         isDark ? "border-slate-800 bg-slate-900 text-slate-100 shadow-slate-950/40" : "border-slate-200 bg-white text-slate-900 shadow-slate-900/10"
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* ── Row 1: heading left, action buttons right ── */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Product Details collapse toggle + tooltip */}
         <div className="flex items-center gap-2">
-          <p className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Section controls</p>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !chipsOpen;
+              setChipsOpen(next);
+              window.localStorage.setItem("sku-section-selection-open", String(next));
+            }}
+            className={`flex items-center gap-1.5 text-sm font-semibold ${isDark ? "text-slate-100 hover:text-white" : "text-slate-900 hover:text-slate-700"}`}
+          >
+            Product Details
+            <svg className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200 ${chipsOpen ? "rotate-180" : "rotate-0"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </button>
           <div className="group relative inline-flex">
-            <span
-              className={`inline-flex h-6 w-6 cursor-default items-center justify-center rounded-full border text-[11px] font-semibold ${
-                isDark
-                  ? "border-slate-700 text-slate-200 hover:border-indigo-300 hover:text-indigo-200"
-                  : "border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600"
-              }`}
-              title="Click a section to expand, then drag the column edges to resize like Excel."
-              aria-label="Tips"
-              role="img"
-            >
-              ?
-            </span>
-            <div className={`pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-xl border px-3 py-2 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 ${
-              isDark ? "border-slate-700 bg-slate-800 text-slate-200" : "border-slate-200 bg-white text-slate-700"
-            }`}>
-              Click a section to expand, then drag the column edges to resize like Excel.
-              <div className={`absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent ${isDark ? "border-t-slate-700" : "border-t-slate-200"}`} />
+            <span className={`inline-flex h-6 w-6 cursor-default items-center justify-center rounded-full border text-[11px] font-semibold ${isDark ? "border-slate-700 text-slate-200 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600"}`} aria-label="Tips" role="img">?</span>
+            <div className={`pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border px-3 py-2 text-xs opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 ${isDark ? "border-slate-700 bg-slate-800 text-slate-200" : "border-slate-200 bg-white text-slate-700"}`}>
+              <p className="mb-1">Toggle section chips on/off to show or hide columns. Click the crosshair icon — or Shift+click the chip — to jump to that section in the table.</p>
+              <p>Click a section header to expand its rows, then drag column edges to resize.</p>
+              <div className={`absolute left-2 top-full border-4 border-transparent ${isDark ? "border-t-slate-700" : "border-t-slate-200"}`} />
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onExpandAll}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              isDark
-                ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
-                : "border-slate-200 bg-slate-50 text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
-            }`}
-          >
-            Expand all
-          </button>
-          <button
-            type="button"
-            onClick={onCollapseAll}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              isDark
-                ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
-                : "border-slate-200 bg-white text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
-            }`}
-          >
-            Collapse all
-          </button>
-          <button
-            type="button"
-            onClick={() => void onExport()}
-            disabled={!hasData || exporting}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              isDark
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400 hover:text-emerald-50"
-                : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:text-emerald-900"
-            } disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            {exporting ? "Preparing Excel..." : "Export Excel"}
-          </button>
+
+        {/* Action buttons — always right-aligned */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Section visibility controls (only when chips are visible) */}
+          {chipsOpen && (
+            <div className={`flex items-center gap-1.5 border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+              <button type="button" onClick={onShowAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Show all</button>
+              <button type="button" onClick={onHideAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Hide all</button>
+            </div>
+          )}
+
+          {/* Table expand/collapse */}
+          <div className={`flex items-center gap-1.5 border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+            <button type="button" onClick={onExpandAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Expand all</button>
+            <button type="button" onClick={onCollapseAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Collapse all</button>
+          </div>
+
+          {/* Export */}
+          <button type="button" onClick={() => void onExport()} disabled={!hasData || exporting} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400 hover:text-emerald-50" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:text-emerald-900"} disabled:cursor-not-allowed disabled:opacity-60`}>{exporting ? "Preparing…" : "Export Excel"}</button>
+
+          {/* Conditional reset buttons */}
           {Object.values(sortState).some((s) => s.length > 0) && (
-            <button
-              type="button"
-              onClick={() => setSortState({})}
-              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                isDark
-                  ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:text-amber-50"
-                  : "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:text-amber-900"
-              }`}
-            >
-              Reset Sort
-            </button>
+            <button type="button" onClick={() => setSortState({})} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:text-amber-50" : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:text-amber-900"}`}>Reset Sort</button>
           )}
           {Object.values(filterState).some((s) => Object.keys(s).length > 0) && (
-            <button
-              type="button"
-              onClick={() => { setFilterState({}); setOpenFilterColId(null); setFilterButtonRect(null); }}
-              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                isDark
-                  ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-100 hover:border-indigo-400 hover:text-indigo-50"
-                  : "border-indigo-200 bg-indigo-50 text-indigo-800 hover:border-indigo-300 hover:text-indigo-900"
-              }`}
-            >
-              Reset Filters
-            </button>
+            <button type="button" onClick={() => { setFilterState({}); setOpenFilterColId(null); setFilterButtonRect(null); }} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-100 hover:border-indigo-400 hover:text-indigo-50" : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-300 hover:text-indigo-900"}`}>Reset Filters</button>
           )}
+
         </div>
       </div>
+
+      {/* ── Row 2: collapsible section chips ── */}
+      {chipsOpen && (
+        <div className={`mt-3 flex flex-wrap gap-2 border-t pt-3 ${isDark ? "border-slate-800" : "border-slate-100"}`}>
+          {allSections.filter((s) => s.key !== "skuInfo").map((section) => {
+            const enabled = visibility[section.key];
+            return (
+              <div
+                key={`vis-${section.key}`}
+                className={`inline-flex items-stretch rounded-full border text-xs font-semibold transition ${
+                  enabled
+                    ? isDark
+                      ? "border-indigo-300 bg-indigo-100 text-indigo-900 shadow-sm shadow-indigo-900/40"
+                      : "border-indigo-300 bg-indigo-100 text-indigo-900 shadow-sm shadow-indigo-200/70"
+                    : isDark
+                      ? "border-slate-600 bg-slate-800 text-slate-300 opacity-80 hover:opacity-100 hover:border-slate-500"
+                      : "border-slate-300 bg-slate-50 text-slate-500 opacity-80 hover:opacity-100 hover:border-slate-400"
+                }`}
+              >
+                {/* Toggle side — Shift+click jumps to section when ON */}
+                <button
+                  type="button"
+                  aria-pressed={enabled}
+                  onClick={(e) => {
+                    if (enabled && e.shiftKey) {
+                      jumpToSection(section.key);
+                    } else {
+                      onToggleVisibility(section.key);
+                    }
+                  }}
+                  className={`inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 transition ${
+                    enabled ? "rounded-l-full hover:bg-indigo-200/60" : "rounded-full"
+                  }`}
+                >
+                  <span className={`flex items-center gap-0.5 rounded-full border px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest ${
+                    enabled
+                      ? "border-indigo-400 bg-indigo-600 text-white"
+                      : isDark ? "border-slate-600 bg-slate-700 text-slate-400" : "border-slate-300 bg-slate-100 text-slate-400"
+                  }`}>
+                    {enabled
+                      ? <><svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>On</>
+                      : <><svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>Off</>
+                    }
+                  </span>
+                  <span>{section.title}</span>
+                </button>
+
+                {/* Jump side — only for enabled sections */}
+                {enabled && (
+                  <>
+                    <span className={`w-px self-stretch ${isDark ? "bg-indigo-300/40" : "bg-indigo-300/60"}`} />
+                    <button
+                      type="button"
+                      aria-label={`Jump to ${section.title}`}
+                      onClick={() => jumpToSection(section.key)}
+                      className={`inline-flex items-center justify-center rounded-r-full px-2.5 py-1.5 transition ${
+                        isDark
+                          ? "text-indigo-700 hover:bg-indigo-200/60 hover:text-indigo-900"
+                          : "text-indigo-400 hover:bg-indigo-200/60 hover:text-indigo-700"
+                      }`}
+                    >
+                      <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="8" cy="8" r="3"/>
+                        <line x1="8" y1="1" x2="8" y2="4"/>
+                        <line x1="8" y1="12" x2="8" y2="15"/>
+                        <line x1="1" y1="8" x2="4" y2="8"/>
+                        <line x1="12" y1="8" x2="15" y2="8"/>
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
 
       <div
@@ -1895,6 +1970,7 @@ function CombinedSectionsTable({
                 return (
                   <th
                     key={`header-group-${section.key}`}
+                    id={`section-col-${section.key}`}
                     colSpan={span}
                     className={`section-header-cell px-3 py-3 text-left ${
                       isSticky
@@ -1954,7 +2030,7 @@ function CombinedSectionsTable({
                 return (
                   <Fragment key={`header-set-${section.key}`}>
                     <th
-                      className={`px-3 py-1.5 ${!isSticky ? "cursor-pointer" : ""}`}
+                      className={`px-3 py-1.5 cursor-pointer group`}
                       style={{
                         ...summaryCellStyle(expanded, accent, isSticky, isDark, isSticky ? 0 : undefined),
                         position: "sticky",
@@ -1963,14 +2039,23 @@ function CombinedSectionsTable({
                         backgroundColor: expanded ? accent : (isDark ? "#0b1221" : "#f8fafc"),
                         borderRight: isLast ? undefined : `1px solid ${separator}`,
                       }}
-                      onClick={isSticky ? undefined : () => onToggleSection(section.key)}
+                      onClick={isSticky
+                        ? () => setSkuSortDir((d) => d === null ? "asc" : d === "asc" ? "desc" : null)
+                        : () => onToggleSection(section.key)}
                     >
                       <span
-                        className={`inline-flex w-full justify-between text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
+                        className={`inline-flex w-full items-center gap-1 text-left font-semibold uppercase tracking-wide ${isDark ? "text-slate-50" : "text-slate-900"} transition-opacity duration-200 ${
                           expanded ? "opacity-0" : "opacity-100"
                         }`}
                       >
-                        Summary
+                        {isSticky ? (
+                          <>
+                            SKU
+                            <span className="text-[10px] font-bold">
+                              {skuSortDir === "asc" ? "↑" : skuSortDir === "desc" ? "↓" : <span className="opacity-25 transition-opacity duration-150 group-hover:opacity-70">↕</span>}
+                            </span>
+                          </>
+                        ) : "Summary"}
                       </span>
                     </th>
                     {section.columns.map((column, columnIndex) => {
@@ -2073,7 +2158,7 @@ function CombinedSectionsTable({
                 </td>
               </tr>
             ) : (
-              rows.map((row, rowIndex) => {
+              sortedRows.map((row, rowIndex) => {
                 const isEvenSkuRow = rowIndex % 2 === 0;
                 const rowTint = isDark
                   ? isEvenSkuRow ? "rgba(255,255,255,0.0)" : "rgba(255,255,255,0.04)"
@@ -2316,119 +2401,6 @@ function CombinedSectionsTable({
   );
 }
 
-function SectionVisibilityToggles({
-  sections,
-  visibility,
-  onToggle,
-  onShowAll,
-  onHideAll,
-  theme,
-  disabled = false,
-}: SectionVisibilityControlsProps) {
-  const isDark = theme === "dark";
-  const disabledStyles = disabled ? "opacity-60 pointer-events-none" : "";
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const stored = window.localStorage.getItem("sku-section-selection-open");
-    return stored === null ? true : stored === "true";
-  });
-  return (
-    <section
-      className={`mt-10 rounded-3xl border p-6 shadow-lg ${
-        isDark ? "border-slate-800 bg-slate-900 text-slate-100 shadow-slate-950/40" : "border-slate-200 bg-white text-slate-900 shadow-slate-900/5"
-      }`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            const next = !open;
-            setOpen(next);
-            window.localStorage.setItem("sku-section-selection-open", String(next));
-          }}
-          className={`flex items-center gap-2 text-base font-semibold ${isDark ? "text-slate-100 hover:text-white" : "text-slate-900 hover:text-slate-700"}`}
-        >
-          Section selection
-          <svg
-            className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : "rotate-0"}`}
-            viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
-          >
-            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-          </svg>
-        </button>
-        {open && (
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onShowAll}
-              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                isDark
-                  ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
-                  : "border-slate-200 bg-slate-50 text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
-              }`}
-              disabled={disabled}
-            >
-              Show all
-            </button>
-            <button
-              type="button"
-              onClick={onHideAll}
-              className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                isDark
-                  ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200"
-                  : "border-slate-200 bg-white text-slate-900 hover:border-indigo-300 hover:text-indigo-600"
-              }`}
-              disabled={disabled}
-            >
-              Hide all
-            </button>
-          </div>
-        )}
-      </div>
-      {open && <div className={`mt-4 flex flex-wrap gap-2 ${disabledStyles}`}>
-        {sections
-          .filter((section) => section.key !== "skuInfo")
-          .map((section) => {
-            const enabled = visibility[section.key];
-            return (
-              <button
-                key={`visibility-${section.key}`}
-                type="button"
-                aria-pressed={enabled}
-                onClick={() => onToggle(section.key)}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  enabled
-                    ? isDark
-                      ? "border-indigo-400/60 bg-indigo-500/15 text-indigo-100 shadow-sm shadow-indigo-900/40"
-                      : "border-indigo-200 bg-indigo-50 text-indigo-900 shadow-sm shadow-indigo-200/70"
-                    : isDark
-                      ? "border-slate-700 bg-slate-800 text-slate-200 hover:border-indigo-400 hover:text-indigo-200"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
-                }`}
-              >
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className={`flex items-center rounded-full border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-widest ${
-                    enabled
-                      ? isDark
-                        ? "border-indigo-300/70 bg-slate-900 text-indigo-100"
-                        : "border-indigo-300 bg-white text-indigo-600"
-                      : isDark
-                        ? "border-slate-600 bg-slate-800 text-slate-300"
-                        : "border-slate-300 bg-slate-50 text-slate-500"
-                  }`}
-                >
-                  {enabled ? "On" : "Off"}
-                </span>
-                <span>{section.title}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>}
-    </section>
-  );
-}
 
 function PlusMinusIcon({ expanded, isDark }: { expanded: boolean; isDark: boolean }) {
   return (
