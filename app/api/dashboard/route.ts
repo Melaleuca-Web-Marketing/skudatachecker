@@ -256,12 +256,12 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
   return res.json() as Promise<ApiSkuItem[]>;
 }
 
-function dedupeKitDetails(rows: ApiKitDetailsRow[]): ApiKitDetailsRow[] {
+function dedupe<T>(rows: T[], key: (r: T) => string): T[] {
   const seen = new Set<string>();
   return rows.filter((r) => {
-    const key = `${r.country}|${r.parentSku}|${r.childSku}|${r.sortOrder}|${r.startDate}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const k = key(r);
+    if (seen.has(k)) return false;
+    seen.add(k);
     return true;
   });
 }
@@ -274,13 +274,18 @@ function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
   target.pricing.push(...source.pricing);
   target.productPoints.push(...source.productPoints);
   target.kitDetails.push(...source.kitDetails);
-  target.kitDetails = dedupeKitDetails(target.kitDetails);
+  target.kitDetails = dedupe(target.kitDetails, (r) => `${r.country}|${r.parentSku}|${r.childSku}|${r.sortOrder}|${r.startDate}`);
   target.productBusinessRules.push(...source.productBusinessRules);
   target.productBayLocation.push(...source.productBayLocation);
+  target.productBayLocation = dedupe(target.productBayLocation, (r) => `${r.country}|${r.warehouse}|${r.bayLocation}`);
   target.productDimension.push(...source.productDimension);
+  target.productDimension = dedupe(target.productDimension, (r) => `${r.country}|${r.unit}`);
   target.productWeight.push(...source.productWeight);
+  target.productWeight = dedupe(target.productWeight, (r) => `${r.country}|${r.weightUnit}`);
   target.productSkuCounter.push(...source.productSkuCounter);
+  target.productSkuCounter = dedupe(target.productSkuCounter, (r) => `${r.country}|${r.warehouse}`);
   target.customsDetails.push(...source.customsDetails);
+  target.customsDetails = dedupe(target.customsDetails, (r) => r.country);
 }
 
 function mergeSkuItems(itemsByCountry: ApiSkuItem[][]) {

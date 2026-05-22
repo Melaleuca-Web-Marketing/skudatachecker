@@ -217,6 +217,7 @@ type CombinedTableProps = {
   onToggleVisibility: (key: SectionKey) => void;
   onShowAll: () => void;
   onHideAll: () => void;
+  onReorder: (order: SectionKey[]) => void;
 };
 
 const SOFTWARE_SYSTEMS = [
@@ -766,27 +767,34 @@ export default function Page() {
   );
 
   // ── Restore persisted preferences on mount ──────────────────────────────────
+  // isInitialized stays false until the read effect applies stored values, which
+  // prevents the write effect from overwriting storage with defaults on first render.
+  const [isInitialized, setIsInitialized] = useState(false);
+
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") { setIsInitialized(true); return; }
     try {
       const raw = window.localStorage.getItem("sku-prefs");
-      if (!raw) return;
-      const prefs = JSON.parse(raw);
-      if (typeof prefs.skuInput === "string") setSkuInput(prefs.skuInput);
-      if (typeof prefs.softwareSystem === "string") setSoftwareSystem(prefs.softwareSystem);
-      if (typeof prefs.country === "string") setCountry(prefs.country);
-      if (typeof prefs.webOnly === "boolean") setWebOnly(prefs.webOnly);
-      if (typeof prefs.validationDate === "string") setValidationDate(prefs.validationDate);
-      if (prefs.sectionVisibility && typeof prefs.sectionVisibility === "object") {
-        setSectionVisibility((prev) => ({ ...prev, ...prefs.sectionVisibility }));
+      if (raw) {
+        const prefs = JSON.parse(raw);
+        if (typeof prefs.skuInput === "string") setSkuInput(prefs.skuInput);
+        if (typeof prefs.softwareSystem === "string") setSoftwareSystem(prefs.softwareSystem);
+        if (typeof prefs.country === "string") setCountry(prefs.country);
+        if (typeof prefs.webOnly === "boolean") setWebOnly(prefs.webOnly);
+        if (typeof prefs.validationDate === "string") setValidationDate(prefs.validationDate);
+        if (prefs.sectionVisibility && typeof prefs.sectionVisibility === "object") {
+          setSectionVisibility((prev) => ({ ...prev, ...prefs.sectionVisibility }));
+        }
       }
     } catch {
       // corrupted storage — ignore
     }
+    setIsInitialized(true);
   }, []);
 
   // ── Persist preferences whenever they change ────────────────────────────────
   useEffect(() => {
+    if (!isInitialized) return; // skip the initial render before stored values are loaded
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem("sku-prefs", JSON.stringify({
@@ -800,7 +808,7 @@ export default function Page() {
     } catch {
       // storage full or unavailable — ignore
     }
-  }, [skuInput, softwareSystem, country, webOnly, validationDate, sectionVisibility]);
+  }, [isInitialized, skuInput, softwareSystem, country, webOnly, validationDate, sectionVisibility]);
 
   const countryOptions = useMemo(
     () => SYSTEM_COUNTRIES[softwareSystem as SoftwareSystem] ?? [],
@@ -814,9 +822,31 @@ export default function Page() {
   }, [country, countryOptions]);
 
   const skus = useMemo(() => parseSkus(skuInput), [skuInput]);
+
+  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>(() => {
+    const defaults = SECTION_ORDER.filter((k) => k !== "skuInfo") as SectionKey[];
+    if (typeof window === "undefined") return defaults;
+    try {
+      const stored = window.localStorage.getItem("sku-section-order");
+      if (!stored) return defaults;
+      const parsed = JSON.parse(stored) as SectionKey[];
+      // Merge: keep stored order, append any new sections not yet in storage
+      const merged = parsed.filter((k) => defaults.includes(k));
+      defaults.forEach((k) => { if (!merged.includes(k)) merged.push(k); });
+      return merged;
+    } catch {
+      return defaults;
+    }
+  });
+
+  const handleReorder = (newOrder: SectionKey[]) => {
+    setSectionOrder(newOrder);
+    window.localStorage.setItem("sku-section-order", JSON.stringify(newOrder));
+  };
+
   const sectionList: AnySectionConfig[] = useMemo(
-    () => SECTION_ORDER.map((key) => SECTION_CONFIGS[key]),
-    []
+    () => (["skuInfo", ...sectionOrder] as SectionKey[]).map((key) => SECTION_CONFIGS[key]),
+    [sectionOrder]
   );
   const visibleSections = sectionList.filter((section) =>
     section.key === "skuInfo" ? true : sectionVisibility[section.key]
@@ -863,8 +893,8 @@ export default function Page() {
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem("sku-theme", theme);
-  }, [theme]);
+    if (isInitialized) window.localStorage.setItem("sku-theme", theme);
+  }, [isInitialized, theme]);
 
   useEffect(() => {
     if (!prefsOpen) return;
@@ -1312,6 +1342,7 @@ export default function Page() {
           onToggleVisibility={toggleSectionVisibility}
           onShowAll={showAllSections}
           onHideAll={hideAllSections}
+          onReorder={handleReorder}
         />
       </div>
     </main>
@@ -1503,6 +1534,7 @@ function CombinedSectionsTable({
   onToggleVisibility,
   onShowAll,
   onHideAll,
+  onReorder,
 }: CombinedTableProps) {
   const isDark = theme === "dark";
   const [chipsOpen, setChipsOpen] = useState(() => {
@@ -1520,6 +1552,56 @@ function CombinedSectionsTable({
   const [openFilterColId, setOpenFilterColId] = useState<string | null>(null);
   const [filterButtonRect, setFilterButtonRect] = useState<DOMRect | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<SectionKey[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const chipSections = useMemo(
+    () => allSections.filter((s) => s.key !== "skuInfo"),
+    [allSections]
+  );
+
+  function enterReorderMode() {
+    setPendingOrder(chipSections.map((s) => s.key));
+    setReorderMode(true);
+    if (!chipsOpen) {
+      setChipsOpen(true);
+      window.localStorage.setItem("sku-section-selection-open", "true");
+    }
+  }
+
+  function saveReorder() {
+    onReorder(pendingOrder);
+    setReorderMode(false);
+  }
+
+  function cancelReorder() {
+    setReorderMode(false);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
+  function handleDragOver(e: React.DragEvent, i: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== i) setDragOverIndex(i);
+  }
+
+  function handleDrop(e: React.DragEvent, i: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === i) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const next = [...pendingOrder];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(i, 0, moved);
+    setPendingOrder(next);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
 
   const distinctValuesByCol = useMemo(() => {
     const result: Record<string, Record<number, string[]>> = {};
@@ -1848,102 +1930,148 @@ function CombinedSectionsTable({
 
         {/* Action buttons — always right-aligned */}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {/* Section visibility controls (only when chips are visible) */}
-          {chipsOpen && (
-            <div className={`flex items-center gap-1.5 border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
-              <button type="button" onClick={onShowAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Show all</button>
-              <button type="button" onClick={onHideAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Hide all</button>
-            </div>
+          {reorderMode ? (
+            <>
+              <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>Drag to reorder sections</span>
+              <div className={`flex items-center gap-1.5 border-l pl-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+                <button type="button" onClick={saveReorder} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400 hover:text-emerald-50" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:text-emerald-900"}`}>Save order</button>
+                <button type="button" onClick={cancelReorder} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-slate-100" : "border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"}`}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Section visibility controls (only when chips are visible) */}
+              {chipsOpen && (
+                <div className={`flex items-center gap-1.5 border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+                  <button type="button" onClick={onShowAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Show all</button>
+                  <button type="button" onClick={onHideAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Hide all</button>
+                </div>
+              )}
+
+              {/* Reorder edit button */}
+              {chipsOpen && (
+                <div className={`flex items-center border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+                  <button type="button" onClick={enterReorderMode} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Edit order</button>
+                </div>
+              )}
+
+              {/* Table expand/collapse */}
+              <div className={`flex items-center gap-1.5 border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
+                <button type="button" onClick={onExpandAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Expand all</button>
+                <button type="button" onClick={onCollapseAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Collapse all</button>
+              </div>
+
+              {/* Export */}
+              <button type="button" onClick={() => void onExport()} disabled={!hasData || exporting} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400 hover:text-emerald-50" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:text-emerald-900"} disabled:cursor-not-allowed disabled:opacity-60`}>{exporting ? "Preparing…" : "Export Excel"}</button>
+
+              {/* Conditional reset buttons */}
+              {Object.values(sortState).some((s) => s.length > 0) && (
+                <button type="button" onClick={() => setSortState({})} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:text-amber-50" : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:text-amber-900"}`}>Reset Sort</button>
+              )}
+              {Object.values(filterState).some((s) => Object.keys(s).length > 0) && (
+                <button type="button" onClick={() => { setFilterState({}); setOpenFilterColId(null); setFilterButtonRect(null); }} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-100 hover:border-indigo-400 hover:text-indigo-50" : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-300 hover:text-indigo-900"}`}>Reset Filters</button>
+              )}
+            </>
           )}
-
-          {/* Table expand/collapse */}
-          <div className={`flex items-center gap-1.5 border-r pr-2.5 ${isDark ? "border-slate-700" : "border-slate-200"}`}>
-            <button type="button" onClick={onExpandAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-800 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Expand all</button>
-            <button type="button" onClick={onCollapseAll} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-slate-700 bg-slate-900 text-slate-100 hover:border-indigo-300 hover:text-indigo-200" : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600"}`}>Collapse all</button>
-          </div>
-
-          {/* Export */}
-          <button type="button" onClick={() => void onExport()} disabled={!hasData || exporting} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400 hover:text-emerald-50" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:text-emerald-900"} disabled:cursor-not-allowed disabled:opacity-60`}>{exporting ? "Preparing…" : "Export Excel"}</button>
-
-          {/* Conditional reset buttons */}
-          {Object.values(sortState).some((s) => s.length > 0) && (
-            <button type="button" onClick={() => setSortState({})} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:text-amber-50" : "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:text-amber-900"}`}>Reset Sort</button>
-          )}
-          {Object.values(filterState).some((s) => Object.keys(s).length > 0) && (
-            <button type="button" onClick={() => { setFilterState({}); setOpenFilterColId(null); setFilterButtonRect(null); }} className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${isDark ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-100 hover:border-indigo-400 hover:text-indigo-50" : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-300 hover:text-indigo-900"}`}>Reset Filters</button>
-          )}
-
         </div>
       </div>
 
       {/* ── Row 2: collapsible section chips ── */}
       {chipsOpen && (
         <div className={`mt-3 flex flex-wrap gap-2 border-t pt-3 ${isDark ? "border-slate-800" : "border-slate-100"}`}>
-          {allSections.filter((s) => s.key !== "skuInfo").map((section) => {
+          {(reorderMode ? pendingOrder.map((key) => allSections.find((s) => s.key === key)!).filter(Boolean) : chipSections).map((section, i) => {
             const enabled = visibility[section.key];
+            const isDragOver = reorderMode && dragOverIndex === i;
+            const isDragging = reorderMode && dragIndex === i;
             return (
               <div
                 key={`vis-${section.key}`}
+                draggable={reorderMode}
+                onDragStart={reorderMode ? (e) => { setDragIndex(i); e.dataTransfer.effectAllowed = "move"; } : undefined}
+                onDragOver={reorderMode ? (e) => handleDragOver(e, i) : undefined}
+                onDragLeave={reorderMode ? () => setDragOverIndex(null) : undefined}
+                onDrop={reorderMode ? (e) => handleDrop(e, i) : undefined}
+                onDragEnd={reorderMode ? () => { setDragIndex(null); setDragOverIndex(null); } : undefined}
                 className={`inline-flex items-stretch rounded-full border text-xs font-semibold transition ${
-                  enabled
-                    ? isDark
-                      ? "border-indigo-300 bg-indigo-100 text-indigo-900 shadow-sm shadow-indigo-900/40"
-                      : "border-indigo-300 bg-indigo-100 text-indigo-900 shadow-sm shadow-indigo-200/70"
-                    : isDark
-                      ? "border-slate-600 bg-slate-800 text-slate-300 opacity-80 hover:opacity-100 hover:border-slate-500"
-                      : "border-slate-300 bg-slate-50 text-slate-500 opacity-80 hover:opacity-100 hover:border-slate-400"
+                  reorderMode
+                    ? isDragging
+                      ? "opacity-40 cursor-grabbing"
+                      : isDragOver
+                        ? isDark ? "border-indigo-400 bg-indigo-200 text-indigo-900 scale-105" : "border-indigo-500 bg-indigo-100 text-indigo-900 scale-105"
+                        : isDark ? "border-slate-500 bg-slate-700 text-slate-100 cursor-grab" : "border-slate-300 bg-slate-100 text-slate-700 cursor-grab"
+                    : enabled
+                      ? isDark
+                        ? "border-indigo-300 bg-indigo-100 text-indigo-900 shadow-sm shadow-indigo-900/40"
+                        : "border-indigo-300 bg-indigo-100 text-indigo-900 shadow-sm shadow-indigo-200/70"
+                      : isDark
+                        ? "border-slate-600 bg-slate-800 text-slate-300 opacity-80 hover:opacity-100 hover:border-slate-500"
+                        : "border-slate-300 bg-slate-50 text-slate-500 opacity-80 hover:opacity-100 hover:border-slate-400"
                 }`}
               >
-                {/* Toggle side — Shift+click jumps to section when ON */}
-                <button
-                  type="button"
-                  aria-pressed={enabled}
-                  onClick={(e) => {
-                    if (enabled && e.shiftKey) {
-                      jumpToSection(section.key);
-                    } else {
-                      onToggleVisibility(section.key);
-                    }
-                  }}
-                  className={`inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 transition ${
-                    enabled ? "rounded-l-full hover:bg-indigo-200/60" : "rounded-full"
-                  }`}
-                >
-                  <span className={`flex items-center gap-0.5 rounded-full border px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest ${
-                    enabled
-                      ? "border-indigo-400 bg-indigo-600 text-white"
-                      : isDark ? "border-slate-600 bg-slate-700 text-slate-400" : "border-slate-300 bg-slate-100 text-slate-400"
-                  }`}>
-                    {enabled
-                      ? <><svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>On</>
-                      : <><svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>Off</>
-                    }
+                {reorderMode ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 select-none">
+                    {/* Grip handle */}
+                    <svg className="h-3 w-3 flex-shrink-0 opacity-50" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                      <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+                      <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+                      <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+                    </svg>
+                    {section.title}
                   </span>
-                  <span>{section.title}</span>
-                </button>
-
-                {/* Jump side — only for enabled sections */}
-                {enabled && (
+                ) : (
                   <>
-                    <span className={`w-px self-stretch ${isDark ? "bg-indigo-300/40" : "bg-indigo-300/60"}`} />
+                    {/* Toggle side — Shift+click jumps to section when ON */}
                     <button
                       type="button"
-                      aria-label={`Jump to ${section.title}`}
-                      onClick={() => jumpToSection(section.key)}
-                      className={`inline-flex items-center justify-center rounded-r-full px-2.5 py-1.5 transition ${
-                        isDark
-                          ? "text-indigo-700 hover:bg-indigo-200/60 hover:text-indigo-900"
-                          : "text-indigo-400 hover:bg-indigo-200/60 hover:text-indigo-700"
+                      aria-pressed={enabled}
+                      onClick={(e) => {
+                        if (enabled && e.shiftKey) {
+                          jumpToSection(section.key);
+                        } else {
+                          onToggleVisibility(section.key);
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 transition ${
+                        enabled ? "rounded-l-full hover:bg-indigo-200/60" : "rounded-full"
                       }`}
                     >
-                      <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="8" cy="8" r="3"/>
-                        <line x1="8" y1="1" x2="8" y2="4"/>
-                        <line x1="8" y1="12" x2="8" y2="15"/>
-                        <line x1="1" y1="8" x2="4" y2="8"/>
-                        <line x1="12" y1="8" x2="15" y2="8"/>
-                      </svg>
+                      <span className={`flex items-center gap-0.5 rounded-full border px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-widest ${
+                        enabled
+                          ? "border-indigo-400 bg-indigo-600 text-white"
+                          : isDark ? "border-slate-600 bg-slate-700 text-slate-400" : "border-slate-300 bg-slate-100 text-slate-400"
+                      }`}>
+                        {enabled
+                          ? <><svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>On</>
+                          : <><svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>Off</>
+                        }
+                      </span>
+                      <span>{section.title}</span>
                     </button>
+
+                    {/* Jump side — only for enabled sections */}
+                    {enabled && (
+                      <>
+                        <span className={`w-px self-stretch ${isDark ? "bg-indigo-300/40" : "bg-indigo-300/60"}`} />
+                        <button
+                          type="button"
+                          aria-label={`Jump to ${section.title}`}
+                          onClick={() => jumpToSection(section.key)}
+                          className={`inline-flex items-center justify-center rounded-r-full px-2.5 py-1.5 transition ${
+                            isDark
+                              ? "text-indigo-700 hover:bg-indigo-200/60 hover:text-indigo-900"
+                              : "text-indigo-400 hover:bg-indigo-200/60 hover:text-indigo-700"
+                          }`}
+                        >
+                          <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="8" cy="8" r="3"/>
+                            <line x1="8" y1="1" x2="8" y2="4"/>
+                            <line x1="8" y1="12" x2="8" y2="15"/>
+                            <line x1="1" y1="8" x2="4" y2="8"/>
+                            <line x1="12" y1="8" x2="15" y2="8"/>
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
