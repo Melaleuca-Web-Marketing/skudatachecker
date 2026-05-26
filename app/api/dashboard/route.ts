@@ -159,6 +159,12 @@ const BASE_URL = (process.env.PRODUCT_API_BASE_URL ?? "").replace(/\/$/, "");
 const DEFAULT_SOFTWARE_SYSTEM = process.env.PRODUCT_API_SOFTWARE_SYSTEM ?? "NorthAmerica";
 const USER_ID = process.env.PRODUCT_API_USER_ID ?? "";
 
+// Some software systems route to a different upstream host.
+// Add PRODUCT_API_BASE_URL_<SYSTEM> to .env.local to override per system.
+const SYSTEM_BASE_URL_OVERRIDES: Partial<Record<string, string>> = {
+  Europe: (process.env.PRODUCT_API_BASE_URL_EUROPE ?? "").replace(/\/$/, "") || BASE_URL,
+};
+
 const ALLOWED_SOFTWARE_SYSTEMS = [
   "NorthAmerica",
   "Taiwan",
@@ -237,7 +243,8 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
     params.set("country", country);
   }
 
-  const url = `${BASE_URL}/v1/Products/GlobalProductInformation?${params.toString()}`;
+  const baseUrl = SYSTEM_BASE_URL_OVERRIDES[softwareSystem] ?? BASE_URL;
+  const url = `${baseUrl}/v1/Products/GlobalProductInformation?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
       accept: "text/plain",
