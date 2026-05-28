@@ -789,6 +789,18 @@ export default function Page() {
     } catch {
       // corrupted storage — ignore
     }
+    try {
+      const storedOrder = window.localStorage.getItem("sku-section-order");
+      if (storedOrder) {
+        const parsed = JSON.parse(storedOrder) as SectionKey[];
+        const defaults = SECTION_ORDER.filter((k) => k !== "skuInfo") as SectionKey[];
+        const merged = parsed.filter((k) => defaults.includes(k));
+        defaults.forEach((k) => { if (!merged.includes(k)) merged.push(k); });
+        setSectionOrder(merged);
+      }
+    } catch {
+      // corrupted storage — ignore
+    }
     setIsInitialized(true);
   }, []);
 
@@ -822,22 +834,15 @@ export default function Page() {
   }, [country, countryOptions]);
 
   const skus = useMemo(() => parseSkus(skuInput), [skuInput]);
+  const { rawSkuCount, duplicateSkuCount } = useMemo(() => {
+    const entries = skuInput.split(/[\s,;]+/g).map((v) => v.trim()).filter(Boolean);
+    const unique = new Set(entries).size;
+    return { rawSkuCount: unique, duplicateSkuCount: entries.length - unique };
+  }, [skuInput]);
 
-  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>(() => {
-    const defaults = SECTION_ORDER.filter((k) => k !== "skuInfo") as SectionKey[];
-    if (typeof window === "undefined") return defaults;
-    try {
-      const stored = window.localStorage.getItem("sku-section-order");
-      if (!stored) return defaults;
-      const parsed = JSON.parse(stored) as SectionKey[];
-      // Merge: keep stored order, append any new sections not yet in storage
-      const merged = parsed.filter((k) => defaults.includes(k));
-      defaults.forEach((k) => { if (!merged.includes(k)) merged.push(k); });
-      return merged;
-    } catch {
-      return defaults;
-    }
-  });
+  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>(
+    SECTION_ORDER.filter((k) => k !== "skuInfo") as SectionKey[]
+  );
 
   const handleReorder = (newOrder: SectionKey[]) => {
     setSectionOrder(newOrder);
@@ -933,8 +938,12 @@ export default function Page() {
         }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
+        let message = `HTTP ${res.status}`;
+        try {
+          const data = await res.json() as { error?: string };
+          if (typeof data.error === "string") message = data.error;
+        } catch { /* not JSON — fall back to status code */ }
+        throw new Error(message);
       }
       const json = (await res.json()) as {
         rows: DashboardRow[];
@@ -1190,8 +1199,15 @@ export default function Page() {
                 </div>
               </div>
               {skus.length > 0 && (
-                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  {skus.length} SKU{skus.length === 1 ? "" : "s"} detected
+                <span className={`text-xs ${rawSkuCount > 240 ? "text-amber-500" : isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {rawSkuCount > 240
+                    ? `240 of ${rawSkuCount} SKUs (max 240 — extras ignored)`
+                    : `${skus.length} SKU${skus.length === 1 ? "" : "s"} detected`}
+                  {duplicateSkuCount > 0 && (
+                    <span className="text-amber-500">
+                      {" "}· {duplicateSkuCount} duplicate{duplicateSkuCount === 1 ? "" : "s"} removed
+                    </span>
+                  )}
                 </span>
               )}
             </div>
@@ -1537,11 +1553,11 @@ function CombinedSectionsTable({
   onReorder,
 }: CombinedTableProps) {
   const isDark = theme === "dark";
-  const [chipsOpen, setChipsOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
+  const [chipsOpen, setChipsOpen] = useState(true);
+  useEffect(() => {
     const stored = window.localStorage.getItem("sku-section-selection-open");
-    return stored === null ? true : stored === "true";
-  });
+    if (stored !== null) setChipsOpen(stored === "true");
+  }, []);
   const [tableStickyActive, setTableStickyActive] = useState(false);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [headerHeights, setHeaderHeights] = useState({ section: 44, column: 44 });
@@ -2712,7 +2728,7 @@ function parseSkus(input: string): string[] {
     .map((value) => value.trim())
     .filter(Boolean);
   const unique = Array.from(new Set(values));
-  return unique.slice(0, 60);
+  return unique.slice(0, 240);
 }
 
 function formatDisplayDate(value?: string | null) {

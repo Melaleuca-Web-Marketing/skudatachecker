@@ -318,11 +318,21 @@ type FailedCountryFetch = {
   status: number | "ERR";
 };
 
-async function fetchSkuDataForSelection(
+const CHUNK_SIZE = 60;
+const MAX_SKUS = 240;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+// Fetches one chunk of SKUs across all required countries and merges the results.
+async function fetchChunk(
   skus: string[],
   country: string,
   softwareSystem: SoftwareSystem,
-  countriesToQuery: readonly string[] = SOFTWARE_SYSTEM_COUNTRIES[softwareSystem]
+  countriesToQuery: readonly string[]
 ): Promise<{ items: ApiSkuItem[]; failedCountries: FailedCountryFetch[] }> {
   if (country) {
     return {
@@ -346,13 +356,11 @@ async function fetchSkuDataForSelection(
       itemsByCountry.push(result.value.items);
       continue;
     }
-
     const reason = result.reason;
     if (reason instanceof UpstreamFetchError) {
       failedCountries.push({ country: reason.country, status: reason.status });
       continue;
     }
-
     failedCountries.push({ country: "unknown", status: "ERR" });
   }
 
@@ -360,10 +368,40 @@ async function fetchSkuDataForSelection(
     throw new AllCountriesFailedError(softwareSystem, failedCountries);
   }
 
-  return {
-    items: mergeSkuItems(itemsByCountry),
-    failedCountries,
-  };
+  return { items: mergeSkuItems(itemsByCountry), failedCountries };
+}
+
+// Splits SKUs into chunks of CHUNK_SIZE, fetches all chunks in parallel, and aggregates.
+async function fetchSkuDataForSelection(
+  skus: string[],
+  country: string,
+  softwareSystem: SoftwareSystem,
+  countriesToQuery: readonly string[] = SOFTWARE_SYSTEM_COUNTRIES[softwareSystem]
+): Promise<{ items: ApiSkuItem[]; failedCountries: FailedCountryFetch[] }> {
+  const chunks = chunkArray(skus, CHUNK_SIZE);
+  const settled = await Promise.allSettled(
+    chunks.map((chunk) => fetchChunk(chunk, country, softwareSystem, countriesToQuery))
+  );
+
+  const allItems: ApiSkuItem[] = [];
+  const failedCountriesMap = new Map<string, FailedCountryFetch>();
+  let firstError: unknown;
+
+  for (const result of settled) {
+    if (result.status === "fulfilled") {
+      allItems.push(...result.value.items);
+      for (const fc of result.value.failedCountries) {
+        failedCountriesMap.set(fc.country, fc);
+      }
+    } else {
+      if (!firstError) firstError = result.reason;
+    }
+  }
+
+  // Only propagate a total failure if we got zero items across all chunks.
+  if (!allItems.length && firstError) throw firstError;
+
+  return { items: allItems, failedCountries: Array.from(failedCountriesMap.values()) };
 }
 
 // ── Transform API shape → frontend DashboardRow shape ────────────────────────
@@ -413,8 +451,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No SKUs provided" }, { status: 400 });
   }
 
-  if (skus.length > 60) {
-    return NextResponse.json({ error: "Too many SKUs (max 60)" }, { status: 400 });
+  if (skus.length > MAX_SKUS) {
+    return NextResponse.json({ error: `Too many SKUs (max ${MAX_SKUS})` }, { status: 400 });
   }
 
   const country = body.country?.trim() || "";
