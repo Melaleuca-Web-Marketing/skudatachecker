@@ -126,7 +126,7 @@ function addInfoSheet(
     ["Validation Date", context.validationDate || "--"],
     ["Requested By", requestedBy],
     ["SKU Count", String(context.skus.length)],
-    ["SKUs", context.skus.join(", ") || "--"],
+    ["SKUs", context.skus.map(sanitizeFormulaLikeText).join(", ") || "--"],
     ["Dashboard Rows", String(context.rowCount)],
     ["Visible Sections", context.visibleSections.join(", ") || "--"],
   ];

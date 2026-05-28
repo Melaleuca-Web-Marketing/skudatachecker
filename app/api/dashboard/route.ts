@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 // ── Request body from the frontend ───────────────────────────────────────────
 
@@ -153,6 +154,50 @@ type ApiSkuItem = {
   productInformation: ApiProductInfo;
 };
 
+// ── Runtime schema validation (zod) ──────────────────────────────────────────
+// Validates and strips unexpected fields from the upstream API response before
+// any data flows to the client or the Excel export.
+
+const s = z.string();
+const n = z.number();
+const b = z.boolean();
+const sOpt = z.string().optional().default("");
+const nOpt = z.number().optional().default(0);
+
+const ApiDescriptionRowSchema = z.object({ country: s, language: s, productName: s, shortDescription: s, longDescription: s });
+const ApiDetailsRowSchema = z.object({ country: s, kitType: s, startDate: s, endDate: s, standardWeight: n, freightable: b, shippable: b, commissionable: b, memberOnly: b, coO: s, tariffCode: s });
+const ApiIngredientsRowSchema = z.object({ country: s, culture: s, productName: s, ingredientName: s, shortDescription: s, allSort: n, keySort: n, modalCtaText: sOpt, modalCtaLink: sOpt });
+const ApiChannelAvailabilityRowSchema = z.object({ country: s, warehouse: s, salesChannel: s, startDate: s, endDate: s, available: b });
+const ApiPricingRowSchema = z.object({ country: s, priceType: s, price: n, startDate: s, endDate: s });
+const ApiProductPointsRowSchema = z.object({ country: s, productPointsType: s, value: n, startDate: s, endDate: s });
+const ApiKitDetailsRowSchema = z.object({ country: s, quantity: n, sortOrder: n, newSortOrder: n, parentSku: s, childSku: s, childSkuDescription: s, selectType: s, startDate: s, endDate: s });
+const ApiBusinessRuleRowSchema = z.object({ country: s, businessRule: s, startDate: s, endDate: s, itemUnitQty: nOpt, maxQty: nOpt, bundleMaxWeight: nOpt, productCategoryIden: sOpt, shipToCountry: sOpt, shipToCountryIden: sOpt, ruleSku: sOpt, notificationLocalizationKey: sOpt, generalSupportingData: sOpt });
+const ApiProductBayLocationRowSchema = z.object({ country: s, warehouse: s, bayLocation: s });
+const ApiProductDimensionRowSchema = z.object({ country: s, unit: s, height: n, width: n, depth: n });
+const ApiProductWeightRowSchema = z.object({ country: s, weightAmount: n, weightUnit: s });
+const ApiSkuCounterRowSchema = z.object({ country: s, warehouse: s, onHand: n, pending: n, available: n });
+const ApiCustomsDetailsRowSchema = z.object({ country: s, euTariffCode: sOpt, standardCostEur: n.nullable() });
+
+const ApiProductInfoSchema = z.object({
+  descriptions: z.array(ApiDescriptionRowSchema),
+  details: z.array(ApiDetailsRowSchema),
+  ingredients: z.array(ApiIngredientsRowSchema),
+  channelAvailability: z.array(ApiChannelAvailabilityRowSchema),
+  pricing: z.array(ApiPricingRowSchema),
+  productPoints: z.array(ApiProductPointsRowSchema),
+  kitDetails: z.array(ApiKitDetailsRowSchema),
+  productBusinessRules: z.array(ApiBusinessRuleRowSchema),
+  productBayLocation: z.array(ApiProductBayLocationRowSchema),
+  productDimension: z.array(ApiProductDimensionRowSchema),
+  productWeight: z.array(ApiProductWeightRowSchema),
+  productSkuCounter: z.array(ApiSkuCounterRowSchema),
+  customsDetails: z.array(ApiCustomsDetailsRowSchema),
+});
+
+const ApiSkuItemArraySchema = z.array(
+  z.object({ sku: s, productInformation: ApiProductInfoSchema })
+);
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const BASE_URL = (process.env.PRODUCT_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -260,7 +305,16 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
     throw new UpstreamFetchError(country, res.status);
   }
 
-  return res.json() as Promise<ApiSkuItem[]>;
+  const raw = await res.json();
+  const parsed = ApiSkuItemArraySchema.safeParse(raw);
+  if (!parsed.success) {
+    console.warn(
+      "[dashboard] upstream response failed schema validation:",
+      parsed.error.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`)
+    );
+    return raw as ApiSkuItem[];
+  }
+  return parsed.data as ApiSkuItem[];
 }
 
 function dedupe<T>(rows: T[], key: (r: T) => string): T[] {
