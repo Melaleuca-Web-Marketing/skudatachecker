@@ -335,7 +335,7 @@ function mergeInfoInto(target: ApiProductInfo, source: ApiProductInfo) {
   target.pricing.push(...source.pricing);
   target.productPoints.push(...source.productPoints);
   target.kitDetails.push(...source.kitDetails);
-  target.kitDetails = dedupe(target.kitDetails, (r) => `${r.country}|${r.parentSku}|${r.childSku}|${r.sortOrder}|${r.startDate}`);
+  target.kitDetails = dedupe(target.kitDetails, (r) => `${r.country}|${r.parentSku}|${r.childSku}|${r.sortOrder}|${r.newSortOrder}|${r.startDate}`);
   target.productBusinessRules.push(...source.productBusinessRules);
   target.productBayLocation.push(...source.productBayLocation);
   target.productBayLocation = dedupe(target.productBayLocation, (r) => `${r.country}|${r.warehouse}|${r.bayLocation}`);
