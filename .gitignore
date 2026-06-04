@@ -10,6 +10,9 @@ dist/
 *.log
 *.tsbuildinfo
 
+# Local sample data
+example.json
+
 # Env / secrets
 .env*
 

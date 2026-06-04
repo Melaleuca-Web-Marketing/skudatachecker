@@ -421,10 +421,10 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
       { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
       { header: "Standard Weight", filterType: "number-range", filterValue: (row) => row.standardWeight ?? 0, render: (row) => row.standardWeight ?? "--", sortValue: (row) => row.standardWeight ?? 0 },
-      { header: "Freightable", filterType: "set", render: (row) => formatBoolean(row.freightable) },
-      { header: "Shippable", filterType: "set", render: (row) => formatBoolean(row.shippable) },
-      { header: "Commissionable", filterType: "set", render: (row) => formatBoolean(row.commissionable) },
-      { header: "Member Only", filterType: "set", render: (row) => formatBoolean(row.memberOnly) },
+      { header: "Freightable", filterType: "set", render: (row) => renderBooleanPill(row.freightable) },
+      { header: "Shippable", filterType: "set", render: (row) => renderBooleanPill(row.shippable) },
+      { header: "Commissionable", filterType: "set", render: (row) => renderBooleanPill(row.commissionable) },
+      { header: "Member Only", filterType: "set", render: (row) => renderBooleanPill(row.memberOnly) },
       { header: "CoO", filterType: "set", initialWidth: 80, render: (row) => formatText(row.coo) },
       { header: "Tariff Code", filterType: "text", initialWidth: 160, className: "truncate", render: (row) => { const v = formatText(row.tariffCode); return v === "--" ? "--" : <span title={v} className="block truncate">{v}</span>; } },
     ],
@@ -483,7 +483,7 @@ const SECTION_CONFIGS: { [K in SectionKey]: SectionConfig<K> } = {
       { header: "Sales Channel", filterType: "set", render: (row) => row.salesChannel },
       { header: "Start Date", filterType: "date-range", filterValue: (row) => row.startDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.startDate), sortValue: (row) => row.startDate ?? "" },
       { header: "End Date", filterType: "date-range", filterValue: (row) => row.endDate ?? "", initialWidth: 155, render: (row) => formatDisplayDate(row.endDate), sortValue: (row) => row.endDate ?? "" },
-      { header: "Available", filterType: "set", render: (row) => formatBoolean(row.available) },
+      { header: "Available", filterType: "set", render: (row) => renderBooleanPill(row.available) },
     ],
   },
   pricing: {
@@ -2741,6 +2741,24 @@ function formatDisplayDate(value?: string | null) {
 function formatBoolean(value?: boolean | null) {
   if (value === null || value === undefined) return "--";
   return value ? "Yes" : "No";
+}
+
+function renderBooleanPill(value?: boolean | null) {
+  const label = formatBoolean(value);
+  if (label === "--") return label;
+
+  const isYes = value === true;
+  return (
+    <span
+      className={`inline-flex min-w-12 items-center justify-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+        isYes
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-rose-200 bg-rose-50 text-rose-700"
+      }`}
+    >
+      {label}
+    </span>
+  );
 }
 
 function formatText(value?: string | null) {

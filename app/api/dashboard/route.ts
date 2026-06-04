@@ -74,7 +74,7 @@ type ApiKitDetailsRow = {
   country: string;
   quantity: number;
   sortOrder: number;
-  newSortOrder: number;
+  newSortOrder: string;
   parentSku: string;
   childSku: string;
   childSkuDescription: string;
@@ -170,7 +170,7 @@ const ApiIngredientsRowSchema = z.object({ country: s, culture: s, productName: 
 const ApiChannelAvailabilityRowSchema = z.object({ country: s, warehouse: s, salesChannel: s, startDate: s, endDate: s, available: b });
 const ApiPricingRowSchema = z.object({ country: s, priceType: s, price: n, startDate: s, endDate: s });
 const ApiProductPointsRowSchema = z.object({ country: s, productPointsType: s, value: n, startDate: s, endDate: s });
-const ApiKitDetailsRowSchema = z.object({ country: s, quantity: n, sortOrder: n, newSortOrder: n, parentSku: s, childSku: s, childSkuDescription: s, selectType: s, startDate: s, endDate: s });
+const ApiKitDetailsRowSchema = z.object({ country: s, quantity: n, sortOrder: n, newSortOrder: s, parentSku: s, childSku: s, childSkuDescription: s, selectType: s, startDate: s, endDate: s });
 const ApiBusinessRuleRowSchema = z.object({ country: s, businessRule: s, startDate: s, endDate: s, itemUnitQty: nOpt, maxQty: nOpt, bundleMaxWeight: nOpt, productCategoryIden: sOpt, shipToCountry: sOpt, shipToCountryIden: sOpt, ruleSku: sOpt, notificationLocalizationKey: sOpt, generalSupportingData: sOpt });
 const ApiProductBayLocationRowSchema = z.object({ country: s, warehouse: s, bayLocation: s });
 const ApiProductDimensionRowSchema = z.object({ country: s, unit: s, height: n, width: n, depth: n });
