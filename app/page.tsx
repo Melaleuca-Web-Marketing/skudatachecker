@@ -2475,7 +2475,7 @@ function CombinedSectionsTable({
                                   return (
                                     <div
                                       key={`${section.key}-${rowIndex}-${idx}`}
-                                      className="space-y-0.5 px-3 py-2"
+                                      className="h-[37px] px-3 py-2"
                                       style={{
                                         backgroundColor: columnHighlighted
                                           ? `color-mix(in srgb, ${isDark ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.15)"} 100%, ${itemBg})`
