@@ -2750,7 +2750,7 @@ function renderBooleanPill(value?: boolean | null) {
   const isYes = value === true;
   return (
     <span
-      className={`inline-flex min-w-12 items-center justify-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+      className={`inline-flex h-5 min-w-12 items-center justify-center rounded-full border px-2.5 text-xs font-semibold leading-none ${
         isYes
           ? "border-emerald-200 bg-emerald-50 text-emerald-700"
           : "border-rose-200 bg-rose-50 text-rose-700"
