@@ -186,6 +186,7 @@ type FilterKind = "text" | "date-range" | "set" | "number-range";
 type ColumnFilter =
   | { kind: "text"; value: string }
   | { kind: "date-range"; from: string; to: string }
+  | { kind: "date-active"; date: string }
   | { kind: "set"; values: Set<string> }
   | { kind: "number-range"; min: string; max: string };
 type SectionFilterState = Record<string, Record<number, ColumnFilter>>;
@@ -1377,6 +1378,8 @@ function matchesFilter(filter: ColumnFilter, rawVal: string | number): boolean {
       if (filter.from && str < filter.from) return false;
       if (filter.to && str > filter.to) return false;
       return true;
+    case "date-active":
+      return true;
     case "set":
       return filter.values.has(str);
     case "number-range": {
@@ -1386,6 +1389,59 @@ function matchesFilter(filter: ColumnFilter, rawVal: string | number): boolean {
       return true;
     }
   }
+}
+
+function isDateWindowColumn(header: string) {
+  return header === "Start Date" || header === "End Date";
+}
+
+function getActiveDateForSection(
+  section: AnySectionConfig,
+  activeFilters: Record<number, ColumnFilter>
+): string | null {
+  const orderedFilters = Object.entries(activeFilters)
+    .map(([colIdx, filter]) => ({ colIdx: Number(colIdx), filter }))
+    .sort((a, b) => a.colIdx - b.colIdx);
+
+  for (const { colIdx, filter } of orderedFilters) {
+    const column = section.columns[colIdx];
+    if (filter.kind === "date-active" && filter.date && column && isDateWindowColumn(column.header)) {
+      return filter.date;
+    }
+  }
+
+  return null;
+}
+
+function renderDateActiveValue(
+  value: ReactNode,
+  row: unknown,
+  columnHeader: string,
+  activeDate: string | null
+) {
+  if (!activeDate || !isDateWindowColumn(columnHeader)) return value;
+  const dateRow = row as { startDate?: string | null; endDate?: string | null };
+  const active = isWindowValid(dateRow.startDate, dateRow.endDate, activeDate);
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5 align-top leading-5">
+      <span className="truncate">{value}</span>
+      {renderCompactBooleanPill(active)}
+    </span>
+  );
+}
+
+function renderCompactBooleanPill(value: boolean) {
+  return (
+    <span
+      className={`inline-flex h-4 min-w-8 flex-shrink-0 items-center justify-center rounded-full border px-1.5 text-[10px] font-semibold leading-none ${
+        value
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-rose-200 bg-rose-50 text-rose-700"
+      }`}
+    >
+      {value ? "Yes" : "No"}
+    </span>
+  );
 }
 
 type FilterPopoverProps = {
@@ -1426,25 +1482,16 @@ function FilterPopover({ filterType, currentFilter, distinctValues, isDark, onFi
   }
 
   if (filterType === "date-range") {
-    const from = currentFilter?.kind === "date-range" ? currentFilter.from : "";
-    const to   = currentFilter?.kind === "date-range" ? currentFilter.to   : "";
-    const update = (newFrom: string, newTo: string) =>
-      onFilterChange(newFrom || newTo ? { kind: "date-range", from: newFrom, to: newTo } : null);
     return (
-      <div ref={popoverRef} className={`${base} w-52`} onClick={(e) => e.stopPropagation()}>
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider opacity-50">Date range</p>
-        <div className="space-y-2">
-          <div>
-            <label className="mb-0.5 block text-[10px] opacity-60">On or after</label>
-            <input type="date" className={inputClass} value={from} onChange={(e) => update(e.target.value, to)} />
-          </div>
-          <div>
-            <label className="mb-0.5 block text-[10px] opacity-60">On or before</label>
-            <input type="date" className={inputClass} value={to}   onChange={(e) => update(from, e.target.value)} />
-          </div>
-        </div>
-        {(from || to) && <button className={clearBtn} onClick={() => onFilterChange(null)}>Clear filter</button>}
-      </div>
+      <DateFilterPopover
+        currentFilter={currentFilter}
+        isDark={isDark}
+        inputClass={inputClass}
+        clearBtn={clearBtn}
+        base={base}
+        popoverRef={popoverRef}
+        onFilterChange={onFilterChange}
+      />
     );
   }
 
@@ -1532,6 +1579,105 @@ function FilterPopover({ filterType, currentFilter, distinctValues, isDark, onFi
   }
 
   return null;
+}
+
+type DateFilterMode = "date-range" | "date-active";
+
+type DateFilterPopoverProps = {
+  currentFilter: ColumnFilter | undefined;
+  isDark: boolean;
+  inputClass: string;
+  clearBtn: string;
+  base: string;
+  popoverRef: React.RefObject<HTMLDivElement | null>;
+  onFilterChange: (filter: ColumnFilter | null) => void;
+};
+
+function DateFilterPopover({
+  currentFilter,
+  isDark,
+  inputClass,
+  clearBtn,
+  base,
+  popoverRef,
+  onFilterChange,
+}: DateFilterPopoverProps) {
+  const [mode, setMode] = useState<DateFilterMode>(
+    currentFilter?.kind === "date-active" ? "date-active" : "date-range"
+  );
+
+  useEffect(() => {
+    if (currentFilter?.kind === "date-active") setMode("date-active");
+    if (currentFilter?.kind === "date-range") setMode("date-range");
+  }, [currentFilter?.kind]);
+
+  const from = currentFilter?.kind === "date-range" ? currentFilter.from : "";
+  const to = currentFilter?.kind === "date-range" ? currentFilter.to : "";
+  const activeDate = currentFilter?.kind === "date-active" ? currentFilter.date : "";
+  const updateRange = (newFrom: string, newTo: string) =>
+    onFilterChange(newFrom || newTo ? { kind: "date-range", from: newFrom, to: newTo } : null);
+  const updateActiveDate = (date: string) =>
+    onFilterChange(date ? { kind: "date-active", date } : null);
+  const setFilterMode = (nextMode: DateFilterMode) => {
+    setMode(nextMode);
+    if (nextMode === "date-range" && currentFilter?.kind === "date-active") onFilterChange(null);
+    if (nextMode === "date-active" && currentFilter?.kind === "date-range") onFilterChange(null);
+  };
+
+  const activeModeClass = isDark
+    ? "border-indigo-400 bg-indigo-500/20 text-indigo-100"
+    : "border-indigo-300 bg-indigo-50 text-indigo-700";
+  const inactiveModeClass = isDark
+    ? "border-slate-600 bg-slate-900 text-slate-300 hover:border-indigo-400"
+    : "border-slate-300 bg-white text-slate-600 hover:border-indigo-300";
+
+  return (
+    <div ref={popoverRef} className={`${base} w-56`} onClick={(e) => e.stopPropagation()}>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider opacity-50">Date filter</p>
+      <div className="mb-3 grid grid-cols-2 gap-1">
+        {(["date-range", "date-active"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+              mode === option ? activeModeClass : inactiveModeClass
+            }`}
+            onClick={() => setFilterMode(option)}
+          >
+            {option === "date-range" ? "Range" : "Active on"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "date-range" ? (
+        <div className="space-y-2">
+          <div>
+            <label className="mb-0.5 block text-[10px] opacity-60">On or after</label>
+            <input type="date" className={inputClass} value={from} onChange={(e) => updateRange(e.target.value, to)} />
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[10px] opacity-60">On or before</label>
+            <input type="date" className={inputClass} value={to} onChange={(e) => updateRange(from, e.target.value)} />
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className="mb-0.5 block text-[10px] opacity-60">Date within start/end</label>
+          <input
+            type="date"
+            className={inputClass}
+            value={activeDate}
+            autoFocus
+            onChange={(e) => updateActiveDate(e.target.value)}
+          />
+        </div>
+      )}
+
+      {((mode === "date-range" && (from || to)) || (mode === "date-active" && activeDate)) && (
+        <button className={clearBtn} onClick={() => onFilterChange(null)}>Clear filter</button>
+      )}
+    </div>
+  );
 }
 
 function CombinedSectionsTable({
@@ -1655,6 +1801,14 @@ function CombinedSectionsTable({
   function setColumnFilter(sectionKey: string, colIndex: number, filter: ColumnFilter | null) {
     setFilterState((prev) => {
       const section = { ...(prev[sectionKey] ?? {}) };
+      if (filter?.kind === "date-active") {
+        const sectionConfig = sections.find((s) => s.key === sectionKey);
+        sectionConfig?.columns.forEach((column, index) => {
+          if (index !== colIndex && isDateWindowColumn(column.header) && section[index]?.kind === "date-active") {
+            delete section[index];
+          }
+        });
+      }
       if (filter === null) delete section[colIndex];
       else section[colIndex] = filter;
       return { ...prev, [sectionKey]: section };
@@ -2328,6 +2482,7 @@ function CombinedSectionsTable({
                     const sectionSort = sortState[section.key] ?? [];
                     const rawArr = Array.isArray(data) ? (data as unknown[]) : [];
                     const activeFilters = filterState[section.key] ?? {};
+                    const activeDateForSection = getActiveDateForSection(section, activeFilters);
                     const filteredArr = Object.keys(activeFilters).length === 0 ? rawArr : rawArr.filter((item) =>
                       Object.entries(activeFilters).every(([colIdxStr, filter]) => {
                         const col = section.columns[Number(colIdxStr)] as ColumnDescriptor<typeof section.key> | undefined;
@@ -2460,7 +2615,12 @@ function CombinedSectionsTable({
                                   const isEvenRow = idx % 2 === 0;
                                   const itemBg = isDark ? (isEvenRow ? `${accent}25` : `${accent}15`) : (isEvenRow ? `${accent}20` : `${accent}10`);
                                   const itemBorder = `1px solid ${isEvenRow ? `${accent}40` : `${accent}22`}`;
-                                  const renderedValue = column.render(item as never);
+                                  const renderedValue = renderDateActiveValue(
+                                    column.render(item as never),
+                                    item,
+                                    column.header,
+                                    activeDateForSection
+                                  );
                                   const rule = VALIDATION_RULES[section.key];
                                   const itemFails =
                                     !!validationDate &&
