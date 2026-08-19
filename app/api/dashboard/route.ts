@@ -258,10 +258,10 @@ class AllCountriesFailedError extends Error {
 const SOFTWARE_SYSTEM_COUNTRIES: Record<SoftwareSystem, readonly string[]> = {
   NorthAmerica: ["UnitedStates", "Canada", "Mexico"],
   APAC: ["Australia", "NewZealand", "Singapore", "Malaysia", "Philippines", "Taiwan", "HongKong"],
-  Taiwan: ["Taiwan"],
+  Taiwan: ["Taiwan", "HongKong"],
   Japan: ["Japan"],
   Australia: ["Australia", "NewZealand"],
-  Korea: ["Korea", "HongKong"],
+  Korea: ["Korea"],
   Europe: [
     "UnitedKingdom",
     "Ireland",

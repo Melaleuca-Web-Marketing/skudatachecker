@@ -223,7 +223,6 @@ type CombinedTableProps = {
 
 const SOFTWARE_SYSTEMS = [
   "NorthAmerica",
-  "APAC",
   "Taiwan",
   "Japan",
   "Australia",
@@ -238,11 +237,10 @@ type SoftwareSystem = (typeof SOFTWARE_SYSTEMS)[number];
 
 const SYSTEM_COUNTRIES: Record<SoftwareSystem, string[]> = {
   NorthAmerica: ["UnitedStates", "Canada", "Mexico"],
-  APAC: ["Australia", "NewZealand", "Singapore", "Malaysia", "Philippines", "Taiwan", "HongKong"],
-  Taiwan: ["Taiwan"],
+  Taiwan: ["Taiwan", "HongKong"],
   Japan: ["Japan"],
   Australia: ["Australia", "NewZealand"],
-  Korea: ["Korea", "HongKong"],
+  Korea: ["Korea"],
   Europe: ["UnitedKingdom", "Ireland", "Netherlands", "Germany", "Austria", "Hungary", "Poland", "Spain", "Lithuania", "Latvia", "Estonia"],
   Singapore: ["Singapore", "Malaysia"],
   China: ["China"],
