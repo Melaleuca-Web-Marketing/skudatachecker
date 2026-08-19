@@ -296,7 +296,7 @@ async function fetchSkuData(skus: string[], country: string, softwareSystem: str
   const res = await fetch(url, {
     headers: {
       accept: "text/plain",
-      SoftwareSystem: softwareSystem,
+      SoftwareSystem: getRequestSoftwareSystem(softwareSystem, country),
       UserId: USER_ID,
       CorrelationId: `skuvd-${crypto.randomUUID()}`,
     },
@@ -382,6 +382,14 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
+}
+
+function getRequestSoftwareSystem(softwareSystem: string, country: string): string {
+  if (softwareSystem !== "APAC") return softwareSystem;
+  if (country === "NewZealand") return "Australia";
+  if (country === "Malaysia") return "Singapore";
+  if (country === "HongKong") return "Taiwan";
+  return country || softwareSystem;
 }
 
 // Fetches one chunk of SKUs across all required countries and merges the results.
