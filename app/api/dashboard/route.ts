@@ -207,11 +207,13 @@ const USER_ID = process.env.PRODUCT_API_USER_ID ?? "";
 // Some software systems route to a different upstream host.
 // Add PRODUCT_API_BASE_URL_<SYSTEM> to .env.local to override per system.
 const SYSTEM_BASE_URL_OVERRIDES: Partial<Record<string, string>> = {
+  APAC: (process.env.PRODUCT_API_BASE_URL_APAC ?? "").replace(/\/$/, "") || BASE_URL,
   Europe: (process.env.PRODUCT_API_BASE_URL_EUROPE ?? "").replace(/\/$/, "") || BASE_URL,
 };
 
 const ALLOWED_SOFTWARE_SYSTEMS = [
   "NorthAmerica",
+  "APAC",
   "Taiwan",
   "Japan",
   "Australia",
@@ -255,6 +257,7 @@ class AllCountriesFailedError extends Error {
 
 const SOFTWARE_SYSTEM_COUNTRIES: Record<SoftwareSystem, readonly string[]> = {
   NorthAmerica: ["UnitedStates", "Canada", "Mexico"],
+  APAC: ["Australia", "NewZealand", "Singapore", "Malaysia", "Philippines", "Taiwan", "HongKong"],
   Taiwan: ["Taiwan"],
   Japan: ["Japan"],
   Australia: ["Australia", "NewZealand"],

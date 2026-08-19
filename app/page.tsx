@@ -223,6 +223,7 @@ type CombinedTableProps = {
 
 const SOFTWARE_SYSTEMS = [
   "NorthAmerica",
+  "APAC",
   "Taiwan",
   "Japan",
   "Australia",
@@ -237,6 +238,7 @@ type SoftwareSystem = (typeof SOFTWARE_SYSTEMS)[number];
 
 const SYSTEM_COUNTRIES: Record<SoftwareSystem, string[]> = {
   NorthAmerica: ["UnitedStates", "Canada", "Mexico"],
+  APAC: ["Australia", "NewZealand", "Singapore", "Malaysia", "Philippines", "Taiwan", "HongKong"],
   Taiwan: ["Taiwan"],
   Japan: ["Japan"],
   Australia: ["Australia", "NewZealand"],
@@ -333,6 +335,8 @@ const VALIDATION_RULES: Partial<Record<SectionKey, AnyValidationRule>> = {
 
 const SUMMARY_COLUMN_WIDTH = 150;
 const DETAIL_COLUMN_WIDTH = 140;
+const DETAIL_ITEM_HEIGHT = 37;
+const DETAIL_ITEM_GAP = 4;
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -1444,6 +1448,15 @@ function renderCompactBooleanPill(value: boolean) {
   );
 }
 
+function getStackedItemHeight(count: number) {
+  if (count <= 0) return 0;
+  return count * DETAIL_ITEM_HEIGHT + Math.max(0, count - 1) * DETAIL_ITEM_GAP;
+}
+
+function hasSectionRowsAbove(scrollTop: number, rowCount: number) {
+  return rowCount > 0 && scrollTop > getStackedItemHeight(rowCount) + 8;
+}
+
 type FilterPopoverProps = {
   filterType: FilterKind;
   currentFilter: ColumnFilter | undefined;
@@ -1711,6 +1724,7 @@ function CombinedSectionsTable({
   const [skuSortDir, setSkuSortDir] = useState<"asc" | "desc" | null>(null);
   const [sortState, setSortState] = useState<SectionSortState>({});
   const [filterState, setFilterState] = useState<SectionFilterState>({});
+  const [tableScrollTop, setTableScrollTop] = useState(0);
   const [openFilterColId, setOpenFilterColId] = useState<string | null>(null);
   const [filterButtonRect, setFilterButtonRect] = useState<DOMRect | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -1863,6 +1877,17 @@ function CombinedSectionsTable({
     const thRect = th.getBoundingClientRect();
     const wrapperRect = wrapper.getBoundingClientRect();
     wrapper.scrollTo({ left: wrapper.scrollLeft + thRect.left - wrapperRect.left - SUMMARY_COLUMN_WIDTH, behavior: "smooth" });
+  }
+
+  function scrollToSkuRow(rowIndex: number) {
+    const wrapper = tableWrapperRef.current;
+    const rowEl = wrapper?.querySelector<HTMLElement>(`[data-sku-row-index="${rowIndex}"]`);
+    if (!wrapper || !rowEl) return;
+    const stickyHeaderHeight = headerHeights.section + headerHeights.column;
+    wrapper.scrollTo({
+      top: Math.max(0, rowEl.offsetTop - stickyHeaderHeight),
+      behavior: "smooth",
+    });
   }
 
   const tableWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -2254,6 +2279,7 @@ function CombinedSectionsTable({
       <div
         ref={tableWrapperRef}
         className={`table-scroll-wrapper rounded-2xl border ${tableStickyActive ? "sticky-fixed" : ""} ${isDark ? "border-slate-800 bg-white/5" : "border-slate-200 bg-transparent"}`}
+        onScroll={(e) => setTableScrollTop(e.currentTarget.scrollTop)}
       >
         <table className={`min-w-full table-auto border-separate border-spacing-0 text-left text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>
           <thead>
@@ -2464,6 +2490,7 @@ function CombinedSectionsTable({
                 return (
                 <tr
                   key={`row-${row.sku}-${rowIndex}`}
+                  data-sku-row-index={rowIndex}
                   className={isDark ? "text-slate-100 hover:bg-slate-800" : "text-slate-900 hover:bg-slate-50"}
                 >
                   {sections.flatMap((section, sectionIndex) => {
@@ -2600,7 +2627,7 @@ function CombinedSectionsTable({
                               aria-hidden={!expanded}
                               style={{
                                 maxHeight: expanded ? "none" : "0px",
-                                overflow: "hidden",
+                                overflow: expanded ? "visible" : "hidden",
                               }}
                             >
                               {arr.length === 0 ? (
@@ -2611,53 +2638,75 @@ function CombinedSectionsTable({
                                   {sectionMissing ? "No data" : "--"}
                                 </span>
                               ) : (
-                                arr.map((item, idx) => {
-                                  const isEvenRow = idx % 2 === 0;
-                                  const itemBg = isDark ? (isEvenRow ? `${accent}25` : `${accent}15`) : (isEvenRow ? `${accent}20` : `${accent}10`);
-                                  const itemBorder = `1px solid ${isEvenRow ? `${accent}40` : `${accent}22`}`;
-                                  const renderedValue = renderDateActiveValue(
-                                    column.render(item as never),
-                                    item,
-                                    column.header,
-                                    activeDateForSection
-                                  );
-                                  const rule = VALIDATION_RULES[section.key];
-                                  const itemFails =
-                                    !!validationDate &&
-                                    !!rule &&
-                                    (failingItemsByRow.get(rowIndex)?.get(section.key)?.failingItems.has(item) ?? false);
-                                  const columnRelevant =
-                                    !!validationDate &&
-                                    !!rule &&
-                                    (rule.highlightColumns.length === 0 || rule.highlightColumns.includes(column.header));
-                                  const columnHighlighted = itemFails && columnRelevant;
-                                  const columnPasses = !itemFails && columnRelevant;
-                                  return (
-                                    <div
-                                      key={`${section.key}-${rowIndex}-${idx}`}
-                                      className="h-[37px] px-3 py-2"
-                                      style={{
-                                        backgroundColor: columnHighlighted
-                                          ? `color-mix(in srgb, ${isDark ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.15)"} 100%, ${itemBg})`
-                                          : columnPasses
-                                            ? `color-mix(in srgb, ${isDark ? "rgba(34,197,94,0.18)" : "rgba(34,197,94,0.12)"} 100%, ${itemBg})`
-                                            : itemBg,
-                                        borderBottom: itemBorder,
-                                        borderLeft: columnHighlighted
-                                          ? "3px solid rgb(239,68,68)"
-                                          : columnPasses
-                                            ? "3px solid rgb(34,197,94)"
-                                            : "3px solid transparent",
-                                        borderRadius: 0,
-                                        margin: 0,
-                                      }}
-                                    >
-                                      <div className="min-h-5 truncate leading-5">
-                                        {renderDetailValue(renderedValue, isDark)}
+                                <>
+                                  {arr.map((item, idx) => {
+                                    const isEvenRow = idx % 2 === 0;
+                                    const itemBg = isDark ? (isEvenRow ? `${accent}25` : `${accent}15`) : (isEvenRow ? `${accent}20` : `${accent}10`);
+                                    const itemBorder = `1px solid ${isEvenRow ? `${accent}40` : `${accent}22`}`;
+                                    const renderedValue = renderDateActiveValue(
+                                      column.render(item as never),
+                                      item,
+                                      column.header,
+                                      activeDateForSection
+                                    );
+                                    const rule = VALIDATION_RULES[section.key];
+                                    const itemFails =
+                                      !!validationDate &&
+                                      !!rule &&
+                                      (failingItemsByRow.get(rowIndex)?.get(section.key)?.failingItems.has(item) ?? false);
+                                    const columnRelevant =
+                                      !!validationDate &&
+                                      !!rule &&
+                                      (rule.highlightColumns.length === 0 || rule.highlightColumns.includes(column.header));
+                                    const columnHighlighted = itemFails && columnRelevant;
+                                    const columnPasses = !itemFails && columnRelevant;
+                                    return (
+                                      <div
+                                        key={`${section.key}-${rowIndex}-${idx}`}
+                                        className="h-[37px] px-3 py-2"
+                                        style={{
+                                          backgroundColor: columnHighlighted
+                                            ? `color-mix(in srgb, ${isDark ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.15)"} 100%, ${itemBg})`
+                                            : columnPasses
+                                              ? `color-mix(in srgb, ${isDark ? "rgba(34,197,94,0.18)" : "rgba(34,197,94,0.12)"} 100%, ${itemBg})`
+                                              : itemBg,
+                                          borderBottom: itemBorder,
+                                          borderLeft: columnHighlighted
+                                            ? "3px solid rgb(239,68,68)"
+                                            : columnPasses
+                                              ? "3px solid rgb(34,197,94)"
+                                              : "3px solid transparent",
+                                          borderRadius: 0,
+                                          margin: 0,
+                                        }}
+                                      >
+                                        <div className="min-h-5 truncate leading-5">
+                                          {renderDetailValue(renderedValue, isDark)}
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
-                                })
+                                    );
+                                  })}
+                                  {expanded && columnIndex === 0 && hasSectionRowsAbove(tableScrollTop, arr.length) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => scrollToSkuRow(rowIndex)}
+                                      className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition hover:brightness-110 ${
+                                        isDark
+                                          ? "border-slate-600 bg-slate-950/90 text-slate-100 shadow-slate-950/40"
+                                          : "border-slate-300 bg-white/95 text-slate-700 shadow-slate-200/80"
+                                      }`}
+                                      style={{
+                                        position: "sticky",
+                                        top: headerHeights.section + headerHeights.column + 8,
+                                        zIndex: 35,
+                                      }}
+                                      title={`Scroll up to ${section.title} rows`}
+                                    >
+                                      <span aria-hidden="true">↑</span>
+                                      <span className="truncate">{section.title} rows are above</span>
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>
